@@ -54,19 +54,19 @@ final class WordPressMedia
         ?ImageSizes $sizes = null,
         ?ImageProcessor $processor = null,
         private readonly ThumbnailLimits $limits = new ThumbnailLimits,
-        ThumbnailDriverSettings $thumbnails = new ThumbnailDriverSettings,
+        private readonly ThumbnailDriverSettings $thumbnails = new ThumbnailDriverSettings,
     ) {
         $this->legacy = new LegacyUrlRewriter($config);
         $this->sizes = $sizes ?? ImageSize::registry();
         $this->processor = $processor ?? new WordPressImageProcessor;
-        $this->driver = ThumbnailDrivers::make($thumbnails, $this->sizes->names(), $config);
+        $this->driver = ThumbnailDrivers::make($this->thumbnails, $this->sizes->names(), $config);
         $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor, $this->driver, $this->isPrivateAttachment(...));
         $this->exporter = new ThumbnailExporter(
             $this->sizes,
-            $thumbnails,
+            $this->thumbnails,
             $limits,
             $config,
-            $thumbnails->bunnyApiKey === null ? null : new WordPressBunnyPullZone($thumbnails->bunnyApiKey),
+            $this->thumbnails->bunnyApiKey === null ? null : new WordPressBunnyPullZone($this->thumbnails->bunnyApiKey),
         );
         $this->files = new AttachmentFiles(fn (array $metadata): array => $this->declared->existingFiles($metadata));
         $this->private = new PrivateMedia($storage, $config, $this->files);
@@ -224,6 +224,30 @@ final class WordPressMedia
     public function thumbnailDriver(): ThumbnailDriver
     {
         return $this->driver;
+    }
+
+    /**
+     * What keeps the sizes from being served as configured: a driver that could not be used, and the sizes it refuses.
+     *
+     * @return list<string>
+     */
+    public function thumbnailProblems(): array
+    {
+        $problems = [];
+
+        if ($this->thumbnails->driver !== ThumbnailDriverSettings::POLLORA && $this->driver->makesFiles()) {
+            $problems[] = sprintf('The sizes driver "%s" cannot be used as set (see the PHP error log): the default driver makes the sizes.', $this->thumbnails->driver);
+        }
+
+        foreach ($this->sizes->withVariants() as $spec) {
+            $refusal = $this->driver->refusal($spec);
+
+            if ($refusal !== null) {
+                $problems[] = $refusal;
+            }
+        }
+
+        return $problems;
     }
 
     public function thumbnailExporter(): ThumbnailExporter

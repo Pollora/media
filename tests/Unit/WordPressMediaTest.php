@@ -194,3 +194,22 @@ it('keeps the default driver, and says why, when the driver of the sizes is badl
     'imgproxy on s3 without a bucket' => [new ThumbnailDriverSettings(driver: 'imgproxy', imgproxyUrl: 'https://img.client.fr', imgproxyKey: '736563726574', imgproxySalt: '68656C6C6F', imgproxySource: 's3')],
     'unknown driver' => [new ThumbnailDriverSettings(driver: 'cloudfront')],
 ]);
+
+it('reports a driver of the sizes that could not be used, and a size the service refuses', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'k');
+    $sizes->add('default')->scale(width: 100);
+    $good = new ThumbnailDriverSettings(driver: 'imgproxy', imgproxyUrl: 'https://img.client.fr', imgproxyKey: '736563726574', imgproxySalt: '68656C6C6F');
+    $log = tempnam(sys_get_temp_dir(), 'media-log');
+    $previous = ini_set('error_log', $log);
+
+    try {
+        $broken = new WordPressMedia($this->disk->storage, $this->config, sizes: $sizes, thumbnails: new ThumbnailDriverSettings(driver: 'imgproxy'));
+    } finally {
+        ini_set('error_log', (string) $previous);
+        unlink($log);
+    }
+
+    expect($broken->thumbnailProblems())->toHaveCount(1)->and($broken->thumbnailProblems()[0])->toContain('"imgproxy"')
+        ->and((new WordPressMedia($this->disk->storage, $this->config, sizes: $sizes, thumbnails: $good))->thumbnailProblems())->toHaveCount(1)->and((new WordPressMedia($this->disk->storage, $this->config, sizes: $sizes, thumbnails: $good))->thumbnailProblems()[0])->toContain('default')
+        ->and($this->media->thumbnailProblems())->toBe([]);
+});
