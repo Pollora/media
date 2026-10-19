@@ -5,9 +5,13 @@ declare(strict_types=1);
 namespace Pollora\Media\Infrastructure\WordPress;
 
 use Pollora\Hook\Domain\Contract\Action;
+use Pollora\Media\Application\Services\ImageSizes;
+use Pollora\Media\Application\Services\SizePruner;
+use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\LegacyUrlRewriter;
+use Pollora\Media\ImageSize;
 use Throwable;
 
 /**
@@ -23,6 +27,10 @@ final class WordPressMedia
 
     private readonly PrivateMedia $private;
 
+    private readonly ImageSizes $sizes;
+
+    private readonly DeclaredSizes $declared;
+
     /** @var array<int, list<string>> Files of the media being deleted, kept until WordPress has deleted it */
     private array $deleting = [];
 
@@ -30,10 +38,14 @@ final class WordPressMedia
         private readonly MediaStorage $storage,
         private readonly MediaConfig $config,
         private readonly ?Action $action = null,
+        ?ImageSizes $sizes = null,
+        ?ImageProcessor $processor = null,
     ) {
         $this->legacy = new LegacyUrlRewriter($config);
         $this->files = new AttachmentFiles;
         $this->private = new PrivateMedia($storage, $config, $this->files);
+        $this->sizes = $sizes ?? ImageSize::registry();
+        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $processor ?? new WordPressImageProcessor);
     }
 
     public function register(): void
@@ -48,6 +60,7 @@ final class WordPressMedia
         \add_action('delete_attachment', [$this, 'deleteAttachment'], 10, 1);
         \add_action('deleted_post', [$this, 'deletedPost'], 10, 2);
         $this->private->register();
+        $this->declared->register();
 
         if (defined('WP_CLI') && WP_CLI && class_exists(\WP_CLI::class)) {
             \WP_CLI::add_command('pollora media', new MediaCommand(
@@ -57,6 +70,10 @@ final class WordPressMedia
                 rtrim((string) $this->constant('WP_CONTENT_URL'), '/').'/uploads',
                 $this->private,
                 $this->files,
+            ));
+            \WP_CLI::add_command('pollora media thumbs', new ThumbsCommand(
+                new SizeWarmer($this->declared, $this->storage),
+                new SizePruner($this->storage, $this->sizes),
             ));
         }
 
@@ -142,6 +159,16 @@ final class WordPressMedia
             \do_action('pollora/media/deleted', $postId, $this->deleting[$postId]);
             unset($this->deleting[$postId]);
         }
+    }
+
+    public function declaredSizes(): DeclaredSizes
+    {
+        return $this->declared;
+    }
+
+    public function imageSizes(): ImageSizes
+    {
+        return $this->sizes;
     }
 
     public function privateMedia(): PrivateMedia

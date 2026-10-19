@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.3.0] - 2026-10-19
+### Added
 
-## [0.2.0] - 2026-10-19
+- Declared image sizes: `ImageSize::add('card')->cover(600, 400)->webp(75)`, with `cover()`, `scale()`, `contain()`, `webp()`, `avif()`, `original()`, `widths()`, `eager()` and `upscale()`; WebP at quality 80 by default. `ImageSizes` is the registry, `ImageSizeSpec` a checked size
+- The file of a size is named `photo-card-600x400-{signature}.webp`, the signature being an HMAC of the original and of the parameters of the size: changing a size changes its name. The URL, width, height and `srcset` of a size come from the metadata of the original alone (`DeclaredSizes`), whether the file exists or not; the sizes are made when an image is uploaded, with the image editor of WordPress (`WordPressImageProcessor`, behind the `ImageProcessor` port). The sizes WordPress registers itself are left as they are
+- `wp pollora media thumbs warm` makes the missing files of the declared sizes for the images already in the library, and `wp pollora media thumbs prune` deletes the files of a size that was changed or removed (a dry run unless `--execute`)
+
+## [0.3.0] - 2026-10-19
 
 ### Added
 
@@ -19,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `AttachmentFiles`: every file of a media, with those a plugin declares (`pollora/media/attachment_files`)
 - Hooks to extend and audit: the `pollora/media/signed_url` filter and the `pollora/media/stored`, `pollora/media/deleted` and `pollora/media/visibility_changed` actions
 - `wp pollora media files <id>` and `wp pollora media visibility <id> --private|--public`
+
+## [0.2.0] - 2026-10-19
 
 ### Added
 
