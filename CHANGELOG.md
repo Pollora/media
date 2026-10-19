@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-19
+
 ### Fixed
 
 - The URL of a size made by a service carries a version of the size (`?class=card&v=3f9a1c2b` for Bunny, `…@webp?v=3f9a1c2b` for imgproxy). Found by running the whole thing on a real site and a real Bunny pull zone: after a class was changed, the CDN kept serving the old variant under the same `?class=card` URL, whereas a changed size changes the name of the file of the default driver. The version is not signed and the services ignore it, so nothing is asked of them; `ImageSizeSpec::version()` derives it from the fit, dimensions, format, quality and upscaling
