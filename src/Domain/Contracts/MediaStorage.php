@@ -31,6 +31,21 @@ interface MediaStorage
 
     public function move(string $source, string $destination): void;
 
+    /**
+     * @return 'public'|'private'
+     */
+    public function visibility(string $path): string;
+
+    /**
+     * @param  'public'|'private'  $visibility
+     */
+    public function setVisibility(string $path, string $visibility): void;
+
+    /**
+     * A URL that gives access to a private file until it expires, or null when the disk cannot sign one.
+     */
+    public function temporaryUrl(string $path, \DateTimeInterface $expiresAt): ?string;
+
     public function size(string $path): int;
 
     public function lastModified(string $path): int;

@@ -53,6 +53,21 @@ final readonly class FailingStorage implements MediaStorage
         $this->inner->move($source, $destination);
     }
 
+    public function visibility(string $path): string
+    {
+        return $this->inner->visibility($path);
+    }
+
+    public function setVisibility(string $path, string $visibility): void
+    {
+        $this->inner->setVisibility($path, $visibility);
+    }
+
+    public function temporaryUrl(string $path, \DateTimeInterface $expiresAt): ?string
+    {
+        return $this->inner->temporaryUrl($path, $expiresAt);
+    }
+
     public function size(string $path): int
     {
         return $this->inner->size($path);

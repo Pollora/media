@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure\Flysystem;
 
+use Closure;
+use DateTimeInterface;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\StorageAttributes;
+use League\Flysystem\UnableToGenerateTemporaryUrl;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 
 /**
@@ -15,7 +18,13 @@ use Pollora\Media\Domain\Contracts\MediaStorage;
  */
 final readonly class FlysystemMediaStorage implements MediaStorage
 {
-    public function __construct(private FilesystemOperator $filesystem) {}
+    /**
+     * @param  (Closure(string, DateTimeInterface): ?string)|null  $temporaryUrls  Signs a URL in place of Flysystem, as a Laravel disk does
+     */
+    public function __construct(
+        private FilesystemOperator $filesystem,
+        private ?Closure $temporaryUrls = null,
+    ) {}
 
     public function exists(string $path): bool
     {
@@ -52,6 +61,27 @@ final readonly class FlysystemMediaStorage implements MediaStorage
     public function move(string $source, string $destination): void
     {
         $this->filesystem->move($source, $destination);
+    }
+
+    public function visibility(string $path): string
+    {
+        return $this->filesystem->visibility($path) === 'private' ? 'private' : 'public';
+    }
+
+    public function setVisibility(string $path, string $visibility): void
+    {
+        $this->filesystem->setVisibility($path, $visibility);
+    }
+
+    public function temporaryUrl(string $path, DateTimeInterface $expiresAt): ?string
+    {
+        try {
+            return $this->temporaryUrls instanceof Closure
+                ? ($this->temporaryUrls)($path, $expiresAt)
+                : $this->filesystem->temporaryUrl($path, $expiresAt);
+        } catch (UnableToGenerateTemporaryUrl) {
+            return null;
+        }
     }
 
     public function size(string $path): int

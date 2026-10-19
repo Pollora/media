@@ -45,6 +45,18 @@ it('says why a disk does not take a file', function (): void {
 
         public function move(string $source, string $destination): void {}
 
+        public function visibility(string $path): string
+        {
+            return 'public';
+        }
+
+        public function setVisibility(string $path, string $visibility): void {}
+
+        public function temporaryUrl(string $path, DateTimeInterface $expiresAt): ?string
+        {
+            return null;
+        }
+
         public function size(string $path): int
         {
             return 0;
