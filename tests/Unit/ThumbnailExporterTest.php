@@ -34,7 +34,7 @@ beforeEach(function (): void {
 it('shows what a Bunny export would create, and writes nothing without --execute', function (): void {
     $report = ($this->exporter)()->export('bunny', execute: false);
 
-    expect($report->created)->toBe(['card', 'hero', 'hero-640w', 'hero-1024w'])
+    expect($report->created)->toBe(['card', 'hero', 'hero640w', 'hero1024w'])
         ->and($report->applied)->toBeFalse()
         ->and($this->pullZone->saved)->toBe([])
         ->and(implode("\n", $report->lines))->toContain('+ card');
@@ -45,7 +45,7 @@ it('writes the classes with --execute, one per size and per extra width', functi
 
     expect($report->applied)->toBeTrue()
         ->and($this->pullZone->saved)->toHaveCount(1)
-        ->and(array_column($this->pullZone->saved[0], 'Name'))->toBe(['card', 'hero', 'hero-640w', 'hero-1024w'])
+        ->and(array_column($this->pullZone->saved[0], 'Name'))->toBe(['card', 'hero', 'hero640w', 'hero1024w'])
         ->and($this->pullZone->saved[0][0]['Properties'])->toBe(['aspect_ratio' => '3:2', 'format' => 'webp', 'quality' => '75', 'width' => '600'])
         ->and($this->pullZone->saved[0][3]['Properties'])->toBe(['format' => 'webp', 'quality' => '80', 'width' => '1024']);
 });
@@ -61,8 +61,8 @@ it('keeps the classes the client made, updates the ones that differ, and leaves 
 
     expect($report->updated)->toBe(['card'])
         ->and($report->unchanged)->toBe(['hero'])
-        ->and($report->created)->toBe(['hero-640w', 'hero-1024w'])
-        ->and(array_column($this->pullZone->saved[0], 'Name'))->toBe(['client-banner', 'card', 'hero', 'hero-640w', 'hero-1024w']);
+        ->and($report->created)->toBe(['hero640w', 'hero1024w'])
+        ->and(array_column($this->pullZone->saved[0], 'Name'))->toBe(['client-banner', 'card', 'hero', 'hero640w', 'hero1024w']);
 });
 
 it('does not write when nothing changes', function (): void {
@@ -74,9 +74,12 @@ it('does not write when nothing changes', function (): void {
     expect($report->applied)->toBeFalse()->and($this->pullZone->saved)->toBe([])->and($report->unchanged)->toHaveCount(4);
 });
 
-it('warns about what Bunny does not guarantee', function (): void {
-    expect(($this->exporter)()->export('bunny', execute: false)->warnings)->toHaveCount(1)
-        ->and(($this->exporter)()->export('bunny', execute: false)->warnings[0])->toContain('"card"')->toContain('cover');
+it('warns about what Bunny does not guarantee, and says nothing of a size it handles', function (): void {
+    expect(($this->exporter)()->export('bunny', execute: false)->warnings)->toBe([]);
+
+    $this->sizes->add('box')->contain(800, 800)->avif(60);
+
+    expect(($this->exporter)()->export('bunny', execute: false)->warnings[0])->toContain('"box"')->toContain('AVIF');
 });
 
 it('needs the pull zone and the key for Bunny, and never prints the key', function (): void {
@@ -141,3 +144,15 @@ it('warns that imgproxy refuses a loopback source by default, for a media URL on
     'a real domain' => ['https://media.client.fr', false],
     'a name that only starts like one' => ['https://localhost.client.fr', false],
 ]);
+
+it('names the Bunny classes with letters and digits only, and refuses the second of two sizes that collide', function (): void {
+    $this->sizes->add('my_size')->scale(width: 100);
+    $this->sizes->add('mysize')->scale(width: 200);
+
+    $report = ($this->exporter)()->export('bunny', execute: true);
+
+    expect($report->created)->toContain('mysize')
+        ->and(array_count_values(array_column($this->pullZone->saved[0], 'Name'))['mysize'])->toBe(1)
+        ->and($this->pullZone->saved[0][4]['Properties'])->toMatchArray(['width' => '100'])
+        ->and(implode(' ', $report->warnings))->toContain('"mysize" would get the Bunny class');
+});

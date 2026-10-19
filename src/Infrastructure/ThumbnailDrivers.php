@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Pollora\Media\Infrastructure;
 
 use InvalidArgumentException;
+use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Contracts\ThumbnailDriver;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Domain\Services\ImgproxySigner;
-use Pollora\Media\Domain\Services\SizedFileName;
 
 /**
  * Picks the driver of the sizes from the settings. A driver that is badly set up does not take the
@@ -20,7 +20,7 @@ final class ThumbnailDrivers
     /**
      * @param  callable(string): void|null  $report  Receives why the default driver was kept; `error_log` by default
      */
-    public static function make(ThumbnailDriverSettings $settings, SizedFileName $names, MediaConfig $config, ?callable $report = null): ThumbnailDriver
+    public static function make(ThumbnailDriverSettings $settings, ImageSizes $sizes, MediaConfig $config, ?callable $report = null): ThumbnailDriver
     {
         $report ??= static function (string $message): void {
             \error_log('pollora/media: '.$message);
@@ -28,15 +28,15 @@ final class ThumbnailDrivers
 
         try {
             return match ($settings->driver) {
-                ThumbnailDriverSettings::POLLORA => new PolloraThumbnailDriver($names, $config),
-                ThumbnailDriverSettings::BUNNY => new BunnyThumbnailDriver($config),
+                ThumbnailDriverSettings::POLLORA => new PolloraThumbnailDriver($sizes->names(), $config),
+                ThumbnailDriverSettings::BUNNY => new BunnyThumbnailDriver($config, $sizes),
                 ThumbnailDriverSettings::IMGPROXY => self::imgproxy($settings, $config),
                 default => throw new InvalidArgumentException(sprintf('The sizes driver "%s" is not known; use "pollora", "bunny" or "imgproxy".', $settings->driver)),
             };
         } catch (InvalidArgumentException $exception) {
             $report($exception->getMessage().' The default driver is used.');
 
-            return new PolloraThumbnailDriver($names, $config);
+            return new PolloraThumbnailDriver($sizes->names(), $config);
         }
     }
 

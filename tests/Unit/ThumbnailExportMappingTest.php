@@ -17,11 +17,11 @@ it('maps a size to the properties of a Bunny class', function (ImageSizeSpec $sp
     'scale by height alone, original format, upscale' => [new ImageSizeSpec('tall', Fit::Scale, null, 500, OutputFormat::Original, 90, true), ['height' => '500', 'quality' => '90', 'upscaling' => 'resampling']],
 ]);
 
-it('says what Bunny does not guarantee for a size', function (): void {
+it('says what Bunny does not guarantee for a size: AVIF only above 4 megapixels, a cover is checked and says nothing', function (): void {
     $bunny = new BunnyClasses;
 
-    expect($bunny->caveats(new ImageSizeSpec('card', Fit::Cover, 600, 400)))->toHaveCount(1)->and($bunny->caveats(new ImageSizeSpec('card', Fit::Cover, 600, 400))[0])->toContain('cover')
-        ->and($bunny->caveats(new ImageSizeSpec('hero', Fit::Scale, 1920, null, OutputFormat::Avif))[0])->toContain('4 megapixels')
+    expect($bunny->caveats(new ImageSizeSpec('hero', Fit::Scale, 1920, null, OutputFormat::Avif))[0])->toContain('4 megapixels')
+        ->and($bunny->caveats(new ImageSizeSpec('card', Fit::Cover, 600, 400)))->toBe([])
         ->and($bunny->caveats(new ImageSizeSpec('hero', Fit::Scale, 1920, null)))->toBe([]);
 });
 
@@ -34,3 +34,7 @@ it('maps a size to an imgproxy preset', function (ImageSizeSpec $spec, string $d
     'scale by width has a zero height' => [new ImageSizeSpec('hero-640w', Fit::Scale, 640, null), 'hero-640w=resize:fit:640:0:0/quality:80'],
     'scale by height has a zero width, with upscale' => [new ImageSizeSpec('tall', Fit::Scale, null, 500, OutputFormat::Webp, 80, true), 'tall=resize:fit:0:500:1/quality:80'],
 ]);
+
+it('turns a size name into a class name made of letters and digits', function (string $size, string $class): void {
+    expect((new BunnyClasses)->className($size))->toBe($class);
+})->with([['card', 'card'], ['hero-640w', 'hero640w'], ['my_size', 'mysize'], ['Wide_2x', 'wide2x']]);

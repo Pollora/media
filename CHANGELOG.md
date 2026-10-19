@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `wp pollora media thumbs export --driver=bunny|imgproxy`: one Bunny class or imgproxy preset per declared size and per extra width. Bunny: the classes are read from the pull zone, merged by name and written back with `--execute` (a dry run otherwise); nothing is deleted and the forced classes setting is never touched. imgproxy: prints `IMGPROXY_PRESETS` and the settings that go with it, without the key or the salt
 - `POLLORA_MEDIA_BUNNY_PULL_ZONE`, `_BUNNY_API_KEY`, `POLLORA_MEDIA_IMGPROXY_URL`, `_KEY`, `_SALT`, `_SIGNATURE_SIZE` and `_SOURCE`
 
+### Fixed
+
+- Checked on a real Bunny pull zone and a real imgproxy 4.0.17 (S3 source included): the dimensions advertised for every size are the ones served. Bunny accepts only letters and digits in a class name, so `hero-640w` is the class `hero640w` and two sizes that collide are refused; Bunny replaces the whole list of classes it is sent, so the export merges before it writes
+
 ### Changed
 
 - The `ThumbnailDriver` port gains `sizeOf()` (the declared size a URL stands for) and `refusal()` (why a size cannot be served). The `srcset` of the extra widths is now built from the driver, not from the file name of the module, so it works with any driver

@@ -64,7 +64,18 @@ final readonly class ThumbnailExporter
         $classes = $this->bunny->classes($pullZone);
         $created = $updated = $unchanged = $warnings = $lines = [];
 
-        foreach ($this->sizes->withVariants() as $name => $spec) {
+        $sizeNames = array_keys($this->sizes->withVariants());
+
+        foreach ($this->sizes->withVariants() as $sizeName => $spec) {
+            $refusal = $mapping->refusal($sizeName, $sizeNames);
+
+            if ($refusal !== null) {
+                $warnings[] = $refusal;
+
+                continue;
+            }
+
+            $name = $mapping->className($sizeName);
             $properties = $mapping->properties($spec);
             $index = $this->indexOf($classes, $name);
 

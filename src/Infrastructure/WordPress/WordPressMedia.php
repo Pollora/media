@@ -59,7 +59,7 @@ final class WordPressMedia
         $this->legacy = new LegacyUrlRewriter($config);
         $this->sizes = $sizes ?? ImageSize::registry();
         $this->processor = $processor ?? new WordPressImageProcessor;
-        $this->driver = ThumbnailDrivers::make($this->thumbnails, $this->sizes->names(), $config);
+        $this->driver = ThumbnailDrivers::make($this->thumbnails, $this->sizes, $config);
         $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor, $this->driver, $this->isPrivateAttachment(...));
         $this->exporter = new ThumbnailExporter(
             $this->sizes,
