@@ -60,6 +60,9 @@ Without any constant, the media stay where WordPress puts them.
 | `POLLORA_MEDIA_CACHE_CONTROL` | `Cache-Control` set on write. Default: `public, max-age=31536000, immutable` |
 | `POLLORA_MEDIA_PRIVATE_EXPIRY` | Life of a signed URL. Default: `+6 hours` |
 | `POLLORA_MEDIA_ASYNC_THUMBNAILS` | Generate the sizes after the upload |
+| `POLLORA_MEDIA_THUMBNAILS_DRIVER` | Who makes the sizes: `pollora` (default), `bunny` or `imgproxy` (see [Sizes made by a service](#sizes-made-by-a-service)) |
+| `POLLORA_MEDIA_BUNNY_PULL_ZONE`, `_API_KEY` | Bunny pull zone id and access key, only to export the classes |
+| `POLLORA_MEDIA_IMGPROXY_URL`, `_KEY`, `_SALT`, `_SIGNATURE_SIZE`, `_SOURCE` | imgproxy: its URL, hexadecimal key and salt, signature size (32), source `url` or `s3` |
 | `POLLORA_MEDIA_DRIVER` | `local` (default) or `s3` |
 | `POLLORA_MEDIA_ROOT` | Local folder of the library. Default: `WP_CONTENT_DIR/uploads` |
 | `POLLORA_MEDIA_BUCKET`, `_REGION`, `_KEY`, `_SECRET`, `_ENDPOINT`, `_PATH_STYLE` | S3 and compatible services. Without `_KEY`, the SDK's own credential chain applies |
@@ -142,11 +145,38 @@ An image uploaded before a size was declared has no file for it yet. Make them w
 wp pollora media thumbs warm --size=card --since=2026-01-01   # the missing files, for the images already uploaded
 wp pollora media thumbs prune                                 # dry run: the files of a size that was changed or removed
 wp pollora media thumbs prune --execute
+wp pollora media thumbs export --driver=bunny                 # with a service that makes the sizes: see below
 ```
 
 `prune` only considers files named the way the module names its sizes, next to an original that is still there: whatever WordPress or a plugin made is left alone.
 
 The format needs an image editor that can write it: GD and Imagick write WebP; AVIF depends on the server. A size that cannot be written is logged and left out of the metadata.
+
+### Sizes made by a service
+
+By default the module makes the sizes itself. For a very large library, an image service can make them instead: the URL of a size changes shape, the declaration of the sizes does not. Set `POLLORA_MEDIA_THUMBNAILS_DRIVER` (`media.thumbnails.driver` with Laravel).
+
+| Driver | URL of a size | Defined at the service by |
+|---|---|---|
+| `pollora` (default) | `photo-card-600x400-{signature}.webp`, a file of the library | the module |
+| `bunny` | `photo.jpg?class=card`, an [image class](https://bunny.net/docs/optimizer/image-classes) of Bunny Optimizer | `thumbs export --driver=bunny` |
+| `imgproxy` | `{imgproxy}/{signature}/card/plain/{source}@webp`, signed, in presets-only mode | `thumbs export --driver=imgproxy` |
+
+With one of them, no file is made (neither at upload nor on demand), there is no fallback route, `thumbs warm` has nothing to do, and a size still has a single URL, built from the metadata of the original. `widths()` become one class or preset per width (`hero-640w`).
+
+**A private media never goes to the service.** Its sizes are not asked of it: WordPress serves the original, signed, as for any private media.
+
+**Bunny.** `media.url` must be the pull zone that serves the library, with the Dynamic Image API enabled. Bunny accepts only letters and digits in the name of a class, so the class of `hero-640w` is `hero640w` and that of `my_size` is `mysize`; two sizes whose classes would be the same cannot both be served, and the second is refused (`thumbs export` and `pollora:doctor` say so). Forcing classes (*Force Transformation Classes*) is up to you; checked on a real pull zone, with it on a valid class is served, an unknown class or a raw transformation gets a 403, and the original, asked with no parameter, is still served. Bunny has no cover mode, so a `cover()` size is a crop to the ratio and then a width (`aspect_ratio` and `width`): the dimensions served are the ones the module advertises, for an original that is big enough as for one that is too small. AVIF is encoded up to 4 megapixels, then Bunny falls back to another format.
+
+**imgproxy** (4.0.x). Set `IMGPROXY_KEY` and `IMGPROXY_SALT` (hexadecimal) to the values of `POLLORA_MEDIA_IMGPROXY_KEY` and `_SALT`, and `IMGPROXY_SIGNATURE_SIZE` to `POLLORA_MEDIA_IMGPROXY_SIGNATURE_SIZE` if it is not 32. The source is the URL of the library (`url`, the default; imgproxy must be allowed to fetch it) or the object of the bucket (`s3`, with `IMGPROXY_USE_S3`). imgproxy refuses a source on the loopback address by default (a `media.url` of `localhost`): for local development only, start it with `IMGPROXY_ALLOW_LOOPBACK_SOURCE_ADDRESSES=true`; `thumbs export` warns about it. A size cannot be named `default`, which imgproxy applies to every image: it is left to WordPress. A badly set up driver is logged and the default driver is kept.
+
+```bash
+wp pollora media thumbs export --driver=bunny             # dry run: the classes that would be created or updated
+wp pollora media thumbs export --driver=bunny --execute   # write them to the pull zone
+wp pollora media thumbs export --driver=imgproxy          # the configuration to give imgproxy
+```
+
+For Bunny, the classes are read, merged by name and written back: the ones you made are kept, nothing is deleted, and the forced classes setting is never changed. The merge matters: Bunny replaces the whole list of classes with the one it is sent. The access key is only ever sent in the `AccessKey` header. imgproxy has no API for presets: the command prints `IMGPROXY_PRESETS`, `IMGPROXY_ONLY_PRESETS=true`, `IMGPROXY_MAX_SRC_RESOLUTION` (in megapixels) and `IMGPROXY_ALLOWED_SOURCES`, never the key or the salt.
 
 ## Private media
 

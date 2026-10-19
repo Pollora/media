@@ -40,6 +40,7 @@ final class Media
             $config ?? $constants->config(),
             new Action,
             limits: $constants->thumbnailLimits(),
+            thumbnails: $constants->thumbnailDriver(),
         );
         $media->register();
 

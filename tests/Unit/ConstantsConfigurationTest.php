@@ -79,3 +79,39 @@ it('reads the limits of a size made on demand, with the defaults of the specific
     expect([$default->maxPixels, $default->maxBytes, $default->concurrency, $default->wait])->toBe([50_000_000, 31_457_280, 4, 10])
         ->and([$set->maxPixels, $set->concurrency, $set->wait])->toBe([10_000_000, 2, 3]);
 });
+
+it('keeps the default driver for sizes until a constant says otherwise', function (): void {
+    $settings = constants([])->thumbnailDriver();
+
+    expect($settings->driver)->toBe('pollora')->and($settings->imgproxySignatureSize)->toBe(32)->and($settings->imgproxySource)->toBe('url');
+});
+
+it('reads the driver of the sizes and its settings from the constants', function (): void {
+    $settings = constants([
+        'POLLORA_MEDIA_THUMBNAILS_DRIVER' => 'imgproxy',
+        'POLLORA_MEDIA_IMGPROXY_URL' => 'https://img.client.fr/',
+        'POLLORA_MEDIA_IMGPROXY_KEY' => '736563726574',
+        'POLLORA_MEDIA_IMGPROXY_SALT' => '68656C6C6F',
+        'POLLORA_MEDIA_IMGPROXY_SIGNATURE_SIZE' => '16',
+        'POLLORA_MEDIA_IMGPROXY_SOURCE' => 's3',
+        'POLLORA_MEDIA_BUCKET' => 'client-media',
+        'POLLORA_MEDIA_BUNNY_PULL_ZONE' => 1234,
+        'POLLORA_MEDIA_BUNNY_API_KEY' => 'access-key',
+    ])->thumbnailDriver();
+
+    expect($settings->driver)->toBe('imgproxy')
+        ->and($settings->imgproxyUrl)->toBe('https://img.client.fr')
+        ->and($settings->imgproxyKey)->toBe('736563726574')
+        ->and($settings->imgproxySalt)->toBe('68656C6C6F')
+        ->and($settings->imgproxySignatureSize)->toBe(16)
+        ->and($settings->imgproxySource)->toBe('s3')
+        ->and($settings->imgproxyBucket)->toBe('client-media')
+        ->and($settings->bunnyPullZone)->toBe('1234')
+        ->and($settings->bunnyApiKey)->toBe('access-key');
+});
+
+it('does not keep the bucket of the library for the sizes unless the source is s3', function (): void {
+    $settings = constants(['POLLORA_MEDIA_BUCKET' => 'client-media', 'POLLORA_MEDIA_IMGPROXY_URL' => 'https://img.client.fr'])->thumbnailDriver();
+
+    expect($settings->imgproxyBucket)->toBeNull();
+});

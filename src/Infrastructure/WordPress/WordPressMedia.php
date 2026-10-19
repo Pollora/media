@@ -7,14 +7,18 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use Pollora\Hook\Domain\Contract\Action;
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Application\Services\SizePruner;
+use Pollora\Media\Application\Services\ThumbnailExporter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
 use Pollora\Media\Application\Services\ThumbnailService;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
+use Pollora\Media\Domain\Contracts\ThumbnailDriver;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Domain\Services\LegacyUrlRewriter;
 use Pollora\Media\ImageSize;
 use Pollora\Media\Infrastructure\Locking\FlockGenerationLock;
+use Pollora\Media\Infrastructure\ThumbnailDrivers;
 use Throwable;
 
 /**
@@ -36,6 +40,10 @@ final class WordPressMedia
 
     private readonly ImageProcessor $processor;
 
+    private readonly ThumbnailDriver $driver;
+
+    private readonly ThumbnailExporter $exporter;
+
     /** @var array<int, list<string>> Files of the media being deleted, kept until WordPress has deleted it */
     private array $deleting = [];
 
@@ -46,11 +54,20 @@ final class WordPressMedia
         ?ImageSizes $sizes = null,
         ?ImageProcessor $processor = null,
         private readonly ThumbnailLimits $limits = new ThumbnailLimits,
+        private readonly ThumbnailDriverSettings $thumbnails = new ThumbnailDriverSettings,
     ) {
         $this->legacy = new LegacyUrlRewriter($config);
         $this->sizes = $sizes ?? ImageSize::registry();
         $this->processor = $processor ?? new WordPressImageProcessor;
-        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor);
+        $this->driver = ThumbnailDrivers::make($this->thumbnails, $this->sizes, $config);
+        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor, $this->driver, $this->isPrivateAttachment(...));
+        $this->exporter = new ThumbnailExporter(
+            $this->sizes,
+            $this->thumbnails,
+            $limits,
+            $config,
+            $this->thumbnails->bunnyApiKey === null ? null : new WordPressBunnyPullZone($this->thumbnails->bunnyApiKey),
+        );
         $this->files = new AttachmentFiles(fn (array $metadata): array => $this->declared->existingFiles($metadata));
         $this->private = new PrivateMedia($storage, $config, $this->files);
     }
@@ -68,7 +85,10 @@ final class WordPressMedia
         \add_action('deleted_post', [$this, 'deletedPost'], 10, 2);
         $this->private->register();
         $this->declared->register();
-        (new ThumbnailRoute($this->thumbnailService(), $this->config))->register();
+
+        if ($this->driver->makesFiles()) {
+            (new ThumbnailRoute($this->thumbnailService(), $this->config))->register();
+        }
 
         if (defined('WP_CLI') && WP_CLI && class_exists(\WP_CLI::class)) {
             \WP_CLI::add_command('pollora media', new MediaCommand(
@@ -82,6 +102,8 @@ final class WordPressMedia
             \WP_CLI::add_command('pollora media thumbs', new ThumbsCommand(
                 new SizeWarmer($this->declared, $this->storage),
                 new SizePruner($this->storage, $this->sizes),
+                $this->driver,
+                $this->exporter,
             ));
         }
 
@@ -199,6 +221,40 @@ final class WordPressMedia
         return $this->declared;
     }
 
+    public function thumbnailDriver(): ThumbnailDriver
+    {
+        return $this->driver;
+    }
+
+    /**
+     * What keeps the sizes from being served as configured: a driver that could not be used, and the sizes it refuses.
+     *
+     * @return list<string>
+     */
+    public function thumbnailProblems(): array
+    {
+        $problems = [];
+
+        if ($this->thumbnails->driver !== ThumbnailDriverSettings::POLLORA && $this->driver->makesFiles()) {
+            $problems[] = sprintf('The sizes driver "%s" cannot be used as set (see the PHP error log): the default driver makes the sizes.', $this->thumbnails->driver);
+        }
+
+        foreach ($this->sizes->withVariants() as $spec) {
+            $refusal = $this->driver->refusal($spec);
+
+            if ($refusal !== null) {
+                $problems[] = $refusal;
+            }
+        }
+
+        return $problems;
+    }
+
+    public function thumbnailExporter(): ThumbnailExporter
+    {
+        return $this->exporter;
+    }
+
     public function imageSizes(): ImageSizes
     {
         return $this->sizes;
@@ -228,6 +284,11 @@ final class WordPressMedia
         $hint = '//'.$host;
 
         return in_array($hint, $urls, true) ? $urls : [...$urls, $hint];
+    }
+
+    private function isPrivateAttachment(int $attachmentId): bool
+    {
+        return $this->private->isPrivate($attachmentId);
     }
 
     private function constant(string $name): string

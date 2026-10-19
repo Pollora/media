@@ -100,6 +100,23 @@ final class ImageSizes
         return $variants;
     }
 
+    /**
+     * Every size to make or to serve: the declared ones, and the bounded size of each extra width.
+     *
+     * @return array<string, ImageSizeSpec>
+     */
+    public function withVariants(): array
+    {
+        $known = [];
+
+        foreach ($this->all() as $name => $spec) {
+            $known[$name] = $spec;
+            $known += $this->variantsOf($spec);
+        }
+
+        return $known;
+    }
+
     public function names(): SizedFileName
     {
         return $this->names;

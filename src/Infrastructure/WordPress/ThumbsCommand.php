@@ -6,6 +6,9 @@ namespace Pollora\Media\Infrastructure\WordPress;
 
 use InvalidArgumentException;
 use Pollora\Media\Application\Services\SizePruner;
+use Pollora\Media\Application\Services\ThumbnailExporter;
+use Pollora\Media\Domain\Contracts\ThumbnailDriver;
+use RuntimeException;
 use WP_CLI;
 
 /**
@@ -22,6 +25,8 @@ final readonly class ThumbsCommand
     public function __construct(
         private SizeWarmer $warmer,
         private SizePruner $pruner,
+        private ThumbnailDriver $driver,
+        private ThumbnailExporter $exporter,
     ) {}
 
     /**
@@ -44,6 +49,12 @@ final readonly class ThumbsCommand
      */
     public function warm(array $args, array $assoc): void
     {
+        if (! $this->driver->makesFiles()) {
+            WP_CLI::warning(sprintf('The "%s" driver makes the sizes itself: there is nothing to warm.', $this->exporter->configuredDriver()));
+
+            return;
+        }
+
         try {
             $report = $this->warmer->warm($assoc['size'] ?? null, $assoc['since'] ?? null);
         } catch (InvalidArgumentException $exception) {
@@ -82,6 +93,55 @@ final readonly class ThumbsCommand
 
         if (! $execute) {
             WP_CLI::log('This was a dry run. Add --execute to apply it.');
+        }
+    }
+
+    /**
+     * Give the service that makes the sizes what it needs to serve the declared sizes: the image classes of a Bunny pull zone, the presets of imgproxy.
+     *
+     * Bunny: the classes are merged by name (the ones you made are kept, nothing is deleted) and written with --execute; the setting that forces classes is never changed.
+     * imgproxy has no API for presets: the configuration to give it is printed, without the key or the salt.
+     *
+     * ## OPTIONS
+     *
+     * [--driver=<driver>]
+     * : `bunny` or `imgproxy`. Defaults to the driver of the sizes.
+     *
+     * [--execute]
+     * : Bunny only. Write the classes to the pull zone. Without it, only show what would change.
+     *
+     * @when after_wp_load
+     *
+     * @param  array<int, string>  $args
+     * @param  array<string, mixed>  $assoc
+     */
+    public function export(array $args, array $assoc): void
+    {
+        $driver = (string) ($assoc['driver'] ?? $this->exporter->configuredDriver());
+        $execute = isset($assoc['execute']);
+
+        try {
+            $report = $this->exporter->export($driver, $execute);
+        } catch (InvalidArgumentException|RuntimeException $exception) {
+            WP_CLI::error($exception->getMessage());
+
+            return;
+        }
+
+        foreach ($report->lines as $line) {
+            WP_CLI::line($line);
+        }
+
+        foreach (array_unique($report->warnings) as $warning) {
+            WP_CLI::warning($warning);
+        }
+
+        if ($driver === 'bunny' && ! $execute && ($report->created !== [] || $report->updated !== [])) {
+            WP_CLI::log('This was a dry run. Add --execute to write the classes.');
+        }
+
+        if ($report->applied) {
+            WP_CLI::success(sprintf('%d class(es) created, %d updated.', count($report->created), count($report->updated)));
         }
     }
 }

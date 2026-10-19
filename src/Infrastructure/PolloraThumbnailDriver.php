@@ -29,4 +29,20 @@ final readonly class PolloraThumbnailDriver implements ThumbnailDriver
     {
         return true;
     }
+
+    public function sizeOf(string $url): ?string
+    {
+        $prefix = $this->config->url.'/';
+
+        if (! str_starts_with($url, $prefix)) {
+            return null;
+        }
+
+        return $this->names->parse(substr($url, strlen($prefix)))['name'] ?? null;
+    }
+
+    public function refusal(ImageSizeSpec $spec): ?string
+    {
+        return null;
+    }
 }
