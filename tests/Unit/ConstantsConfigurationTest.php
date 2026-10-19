@@ -71,3 +71,11 @@ it('refuses a driver it does not know, and an S3 disk without a bucket', functio
     expect(fn () => constants(['POLLORA_MEDIA_DRIVER' => 'ftp'])->filesystem())->toThrow(RuntimeException::class, 'pollora/media/filesystem')
         ->and(fn () => constants(['POLLORA_MEDIA_DRIVER' => 's3'])->filesystem())->toThrow(RuntimeException::class, 'POLLORA_MEDIA_BUCKET');
 });
+
+it('reads the limits of a size made on demand, with the defaults of the specification', function (): void {
+    $default = constants([])->thumbnailLimits();
+    $set = constants(['POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS' => 10_000_000, 'POLLORA_MEDIA_THUMBNAILS_CONCURRENCY' => 2, 'POLLORA_MEDIA_THUMBNAILS_WAIT' => 3])->thumbnailLimits();
+
+    expect([$default->maxPixels, $default->maxBytes, $default->concurrency, $default->wait])->toBe([50_000_000, 31_457_280, 4, 10])
+        ->and([$set->maxPixels, $set->concurrency, $set->wait])->toBe([10_000_000, 2, 3]);
+});

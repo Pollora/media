@@ -8,6 +8,7 @@ use Closure;
 use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
+use Pollora\Media\Application\Services\ThumbnailLimits;
 use Pollora\Media\Domain\Models\MediaConfig;
 use RuntimeException;
 
@@ -26,6 +27,7 @@ use RuntimeException;
  * | `POLLORA_MEDIA_CACHE_CONTROL`     | `Cache-Control` set on write                    |
  * | `POLLORA_MEDIA_PRIVATE_EXPIRY`    | life of a signed URL                            |
  * | `POLLORA_MEDIA_ASYNC_THUMBNAILS`  | generate sizes after the upload                 |
+ * | `POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS`, `_MAX_BYTES`, `_CONCURRENCY`, `_WAIT` | limits of a size made on demand |
  * | `POLLORA_MEDIA_DRIVER`            | `local` (default) or `s3`                       |
  * | `POLLORA_MEDIA_ROOT`              | local folder of the library                     |
  * | `POLLORA_MEDIA_BUCKET`, `_REGION`, `_KEY`, `_SECRET`, `_ENDPOINT`, `_PATH_STYLE` | S3 and compatible services |
@@ -54,6 +56,18 @@ final class ConstantsConfiguration
             (string) ($this->read('POLLORA_MEDIA_CACHE_CONTROL') ?? 'public, max-age=31536000, immutable'),
             (string) ($this->read('POLLORA_MEDIA_PRIVATE_EXPIRY') ?? '+6 hours'),
             (bool) ($this->read('POLLORA_MEDIA_ASYNC_THUMBNAILS') ?? false),
+        );
+    }
+
+    public function thumbnailLimits(): ThumbnailLimits
+    {
+        $defaults = new ThumbnailLimits;
+
+        return new ThumbnailLimits(
+            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS') ?? $defaults->maxPixels),
+            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_BYTES') ?? $defaults->maxBytes),
+            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_CONCURRENCY') ?? $defaults->concurrency),
+            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_WAIT') ?? $defaults->wait),
         );
     }
 

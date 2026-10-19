@@ -39,6 +39,7 @@ final class Media
             new FlysystemMediaStorage($filesystem ?? $constants->filesystem()),
             $config ?? $constants->config(),
             new Action,
+            limits: $constants->thumbnailLimits(),
         );
         $media->register();
 

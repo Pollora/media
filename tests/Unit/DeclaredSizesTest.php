@@ -14,8 +14,8 @@ beforeEach(function (): void {
     $this->disk = new TemporaryStorage;
     $this->disk->storage->write('2026/10/photo.jpg', 'original');
     $this->sizes = new ImageSizes(fn (): string => 'secret-key');
-    $this->sizes->add('card')->cover(600, 400)->webp(75);
-    $this->sizes->add('hero')->scale(width: 1920)->widths([640, 1024]);
+    $this->sizes->add('card')->cover(600, 400)->webp(75)->eager();
+    $this->sizes->add('hero')->scale(width: 1920)->widths([640, 1024])->eager();
     $this->processor = new FakeImageProcessor($this->disk->storage);
     $this->declared = new DeclaredSizes($this->sizes, new MediaConfig('https://media.client.fr'), $this->disk->storage, $this->processor);
     $this->meta = ['file' => '2026/10/photo.jpg', 'width' => 3000, 'height' => 2000, 'sizes' => []];
@@ -124,4 +124,17 @@ it('serves the original for a GIF, which a resize would stop animating, and make
     expect($this->declared->downsize(false, 8, 'card'))->toBe(['https://media.client.fr/2026/10/loop.gif', 400, 300, false])
         ->and($this->declared->generate($meta, 8, 'create'))->toBe($meta)
         ->and($this->processor->made)->toBe([]);
+});
+
+it('makes at upload only the sizes declared eager, the others wait for their first request', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('card')->cover(600, 400)->eager();
+    $sizes->add('lazy')->cover(300, 300);
+    $processor = new FakeImageProcessor($this->disk->storage);
+    $declared = new DeclaredSizes($sizes, new MediaConfig('https://media.client.fr'), $this->disk->storage, $processor);
+
+    $meta = $declared->generate($this->meta, 7, 'create');
+
+    expect(array_column($processor->made, 'size'))->toBe(['card'])
+        ->and($meta['sizes'])->not->toHaveKey('lazy');
 });

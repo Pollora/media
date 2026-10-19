@@ -12,6 +12,11 @@ namespace Pollora\Media\Infrastructure\WordPress;
 final class AttachmentFiles
 {
     /**
+     * @param  (\Closure(array<string, mixed>): list<string>)|null  $declared  The files of the declared sizes that exist for an original
+     */
+    public function __construct(private readonly ?\Closure $declared = null) {}
+
+    /**
      * @return list<string>
      */
     public function for(int $attachmentId): array
@@ -21,7 +26,7 @@ final class AttachmentFiles
         $file = (string) ($metadata['file'] ?? '');
 
         if ($file === '') {
-            return $this->declared($attachmentId, []);
+            return $this->declaredBy($attachmentId, []);
         }
 
         $directory = dirname($file) === '.' ? '' : dirname($file).'/';
@@ -39,7 +44,11 @@ final class AttachmentFiles
             $files[] = $directory.$metadata['original_image'];
         }
 
-        return $this->declared($attachmentId, array_values(array_unique($files)));
+        if ($this->declared instanceof \Closure) {
+            $files = [...$files, ...($this->declared)($metadata)];
+        }
+
+        return $this->declaredBy($attachmentId, array_values(array_unique($files)));
     }
 
     private function fileOf(mixed $size): ?string
@@ -51,7 +60,7 @@ final class AttachmentFiles
      * @param  list<string>  $files
      * @return list<string>
      */
-    private function declared(int $attachmentId, array $files): array
+    private function declaredBy(int $attachmentId, array $files): array
     {
         $extra = \apply_filters('pollora/media/attachment_files', [], $attachmentId);
 

@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sizes made on demand: a size that is not `eager()` is made the first time its URL is asked for, at the exact path of the URL, and answered with `Cache-Control: public, max-age=31536000, immutable`; the web server or the CDN serves it without PHP afterwards. `ThumbnailService` checks the name, the signature, the extension and the path without asking the disk, then the dimensions of the original, its weight and its visibility; `ThumbnailRoute` answers on `parse_request` for WordPress without Laravel. The `ThumbnailDriver` port says where a size lives (`PolloraThumbnailDriver`)
+- Limits per server, with `flock()` locks that need neither WordPress nor Laravel: one process per file, a ceiling of simultaneous sizes (`POLLORA_MEDIA_THUMBNAILS_CONCURRENCY`, 4), no size for an original above `_MAX_PIXELS` (50 million) or `_MAX_BYTES` (30 MiB), and a request that waits more than `_WAIT` seconds (10) gets the nearest size that exists, with no cache
+- The files of the sizes made on demand are deleted with their media and follow its visibility, though WordPress does not know them
+
+### Changed
+
+- Only the sizes declared `eager()` are made when an image is uploaded; the others wait for their first request, or `thumbs warm`
+- The file name of a size with extra widths (`photo-hero-400w-400x267-{signature}.webp`) is read correctly, which `thumbs prune` relies on
+
+### Added
+
 - Declared image sizes: `ImageSize::add('card')->cover(600, 400)->webp(75)`, with `cover()`, `scale()`, `contain()`, `webp()`, `avif()`, `original()`, `widths()`, `eager()` and `upscale()`; WebP at quality 80 by default. `ImageSizes` is the registry, `ImageSizeSpec` a checked size
 - The file of a size is named `photo-card-600x400-{signature}.webp`, the signature being an HMAC of the original and of the parameters of the size: changing a size changes its name. The URL, width, height and `srcset` of a size come from the metadata of the original alone (`DeclaredSizes`), whether the file exists or not; the sizes are made when an image is uploaded, with the image editor of WordPress (`WordPressImageProcessor`, behind the `ImageProcessor` port). The sizes WordPress registers itself are left as they are
 - `wp pollora media thumbs warm` makes the missing files of the declared sizes for the images already in the library, and `wp pollora media thumbs prune` deletes the files of a size that was changed or removed (a dry run unless `--execute`)

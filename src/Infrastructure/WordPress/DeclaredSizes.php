@@ -7,9 +7,11 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
+use Pollora\Media\Domain\Contracts\ThumbnailDriver;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\SizeGeometry;
+use Pollora\Media\Infrastructure\PolloraThumbnailDriver;
 use Throwable;
 
 /**
@@ -27,13 +29,17 @@ final class DeclaredSizes
 
     private readonly SizeGeometry $geometry;
 
+    private readonly ThumbnailDriver $driver;
+
     public function __construct(
         private readonly ImageSizes $sizes,
         private readonly MediaConfig $config,
         private readonly MediaStorage $storage,
         private readonly ImageProcessor $processor,
+        ?ThumbnailDriver $driver = null,
     ) {
         $this->geometry = new SizeGeometry;
+        $this->driver = $driver ?? new PolloraThumbnailDriver($sizes->names(), $config);
     }
 
     public function register(): void
@@ -54,7 +60,8 @@ final class DeclaredSizes
     }
 
     /**
-     * Makes the declared sizes of an image just uploaded, and records them in its metadata.
+     * Makes the eager sizes of an image just uploaded, and records them in its metadata. The others are made
+     * when they are first asked for (the fallback route), or by `thumbs warm`.
      *
      * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>
@@ -66,6 +73,10 @@ final class DeclaredSizes
         }
 
         foreach ($this->known() as $spec) {
+            if (! $spec->eager || ! $this->driver->makesFiles()) {
+                continue;
+            }
+
             $entry = $this->make($metadata, $spec);
 
             if ($entry !== null) {
@@ -101,7 +112,7 @@ final class DeclaredSizes
 
         [$width, $height] = $this->geometry->dimensions($spec, (int) $metadata['width'], (int) $metadata['height']);
 
-        return [$this->url($this->fileOf($metadata, $spec)), $width, $height, true];
+        return [$this->driver->url((string) $metadata['file'], $spec, (int) $metadata['width'], (int) $metadata['height']), $width, $height, true];
     }
 
     /**
@@ -133,7 +144,7 @@ final class DeclaredSizes
 
         foreach ($candidates as $candidate) {
             [$width] = $this->geometry->dimensions($candidate, (int) $imageMeta['width'], (int) $imageMeta['height']);
-            $built[$width] = ['url' => $this->url($this->fileOf($imageMeta, $candidate)), 'descriptor' => 'w', 'value' => $width];
+            $built[$width] = ['url' => $this->driver->url((string) $imageMeta['file'], $candidate, (int) $imageMeta['width'], (int) $imageMeta['height']), 'descriptor' => 'w', 'value' => $width];
         }
 
         ksort($built);
@@ -180,6 +191,36 @@ final class DeclaredSizes
     public function fileFor(array $metadata, ImageSizeSpec $spec): string
     {
         return $this->fileOf($metadata, $spec);
+    }
+
+    /**
+     * The files of the declared sizes of an original that are on the disk, made at upload or on demand.
+     * WordPress does not know the ones made on demand: they follow the media when it is deleted or changes visibility.
+     *
+     * @param  array<string, mixed>  $metadata
+     * @return list<string>
+     */
+    public function existingFiles(array $metadata): array
+    {
+        if ($this->sizes->isEmpty() || ! $this->isMakeable($metadata)) {
+            return [];
+        }
+
+        $files = [];
+
+        foreach ($this->known() as $spec) {
+            $file = $this->fileOf($metadata, $spec);
+
+            try {
+                if ($this->storage->exists($file)) {
+                    $files[] = $file;
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        return $files;
     }
 
     /**
