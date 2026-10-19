@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-19
+
 ### Added
 
 - Declared image sizes: `ImageSize::add('card')->cover(600, 400)->webp(75)`, with `cover()`, `scale()`, `contain()`, `webp()`, `avif()`, `original()`, `widths()`, `eager()` and `upscale()`; WebP at quality 80 by default. `ImageSizes` is the registry, `ImageSizeSpec` a checked size
