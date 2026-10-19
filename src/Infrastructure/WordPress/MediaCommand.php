@@ -121,6 +121,9 @@ final class MediaCommand
      * [--execute]
      * : Copy the files. Without it, only list what would be copied.
      *
+     * [--exclude=<patterns>]
+     * : Comma-separated patterns of the paths to leave out, such as `woocommerce_uploads/*,wc-logs/*`. `*` matches across folders.
+     *
      * [--replace-urls]
      * : After copying, replace the old base URL with the public URL in the database (serialized values included).
      *
@@ -141,18 +144,21 @@ final class MediaCommand
             WP_CLI::error('The source folder does not exist: '.$from);
         }
 
-        $report = (new MediaMigrator(new FlysystemMediaStorage(new Filesystem(new LocalFilesystemAdapter($from))), $this->storage))
+        $exclude = array_values(array_filter(array_map('trim', explode(',', (string) ($assoc['exclude'] ?? '')))));
+
+        $report = (new MediaMigrator(new FlysystemMediaStorage(new Filesystem(new LocalFilesystemAdapter($from))), $this->storage, $this->config->cacheControl))
             ->migrate(! $execute, static function (string $path, string $outcome): void {
                 if ($outcome === 'fail') {
                     WP_CLI::warning('Could not copy '.$path);
                 }
-            });
+            }, $exclude);
 
         WP_CLI::log(sprintf(
-            '%s %d file(s); %d already there; %d failed.',
+            '%s %d file(s); %d already there; %d left out; %d failed.',
             $execute ? 'Copied' : 'Would copy',
             count($report->copied),
             count($report->skipped),
+            count($report->excluded),
             count($report->failed),
         ));
 

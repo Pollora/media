@@ -20,6 +20,9 @@ final class CountingStorage implements MediaStorage
     /** @var array<string, mixed> */
     public array $lastWriteOptions = [];
 
+    /** @var array<string, array<string, mixed>> The options of each write, by path */
+    public array $writeOptions = [];
+
     public function __construct(private readonly MediaStorage $inner) {}
 
     public function exists(string $path): bool
@@ -39,6 +42,7 @@ final class CountingStorage implements MediaStorage
     public function write(string $path, mixed $contents, array $options = []): void
     {
         $this->lastWriteOptions = $options;
+        $this->writeOptions[$path] = $options;
         $this->inner->write($path, $contents, $options);
     }
 
