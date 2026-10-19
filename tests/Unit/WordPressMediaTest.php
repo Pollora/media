@@ -105,9 +105,13 @@ it('deletes the files a plugin declared with the media, besides those WordPress 
     mkdir($this->disk->root.'/2026', 0777, true);
     file_put_contents($this->disk->root.'/2026/extra.webp', 'x');
     file_put_contents($this->disk->root.'/2026/keep.jpg', 'x');
-    Filters\expectApplied('pollora/media/attachment_files')->once()->with([], 42)->andReturn(['2026/extra.webp', '2026/missing.webp']);
+    Functions\when('wp_get_attachment_metadata')->justReturn(['file' => '2026/keep.jpg']);
+    Filters\expectApplied('pollora/media/attachment_files')->with([], 42)->andReturn(['2026/extra.webp', '2026/missing.webp']);
+    Brain\Monkey\Actions\expectDone('pollora/media/deleted')->once()->with(42, ['2026/keep.jpg', '2026/extra.webp', '2026/missing.webp']);
 
     $this->media->deleteAttachment(42);
+    $this->media->deletedPost(42);
+    $this->media->deletedPost(43);
 
     expect(file_exists($this->disk->root.'/2026/extra.webp'))->toBeFalse()
         ->and(file_exists($this->disk->root.'/2026/keep.jpg'))->toBeTrue();
@@ -127,4 +131,11 @@ it('adds a dns-prefetch for the media domain when it differs from the site, and 
 it('rewrites legacy URLs in the content and in rendered blocks', function (): void {
     expect($this->media->content('<img src="https://old.test/content/uploads/2026/a.jpg">'))->toBe('<img src="https://media.client.fr/2026/a.jpg">')
         ->and($this->media->block('<img src="https://old.test/content/uploads/2026/a.jpg">', []))->toBe('<img src="https://media.client.fr/2026/a.jpg">');
+});
+
+it('tells the library of each file stored, with its path and size', function (): void {
+    Brain\Monkey\Actions\expectDone('pollora/media/stored')->once()->with('2026/10/a.jpg', 5);
+    $this->media->register();
+
+    file_put_contents('pollora://uploads/2026/10/a.jpg', 'bytes');
 });

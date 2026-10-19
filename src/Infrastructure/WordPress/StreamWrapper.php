@@ -39,6 +39,9 @@ final class StreamWrapper
 
     private static ?MediaConfig $config = null;
 
+    /** @var (\Closure(string, int): void)|null Told of each file stored */
+    private static ?\Closure $stored = null;
+
     /** @var array<string, array{size: int, mtime: int}|false> What the disk said about a file, for this request */
     private static array $stats = [];
 
@@ -63,11 +66,15 @@ final class StreamWrapper
 
     private int $position = 0;
 
-    public static function register(MediaStorage $storage, MediaConfig $config): void
+    /**
+     * @param  (\Closure(string, int): void)|null  $stored  Receives the path and size of each file once it is on the disk
+     */
+    public static function register(MediaStorage $storage, MediaConfig $config, ?\Closure $stored = null): void
     {
         self::forgetCopies();
         self::$storage = $storage;
         self::$config = $config;
+        self::$stored = $stored;
         self::$stats = [];
 
         if (! self::$shutdownRegistered) {
@@ -88,6 +95,7 @@ final class StreamWrapper
 
         self::$storage = null;
         self::$config = null;
+        self::$stored = null;
         self::$stats = [];
         self::forgetCopies();
     }
@@ -242,6 +250,10 @@ final class StreamWrapper
             $size = (int) (fstat($this->buffer)['size'] ?? 0);
             self::$stats[$this->key] = ['size' => $size, 'mtime' => time()];
             $this->keepCopy($this->key, $size);
+
+            if (self::$stored instanceof \Closure) {
+                (self::$stored)($this->key, $size);
+            }
         }
 
         if (is_resource($this->buffer)) {

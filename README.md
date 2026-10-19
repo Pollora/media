@@ -85,6 +85,9 @@ add_filter('pollora/media/filesystem', fn () => new Filesystem(new SftpAdapter(/
 | `intermediate_image_sizes_advanced`, `wp_generate_attachment_metadata` | With `POLLORA_MEDIA_ASYNC_THUMBNAILS` (or `async_thumbnails`): only `thumbnail` and `medium` are made during the upload; the other sizes are generated afterwards by an asynchronous action (Action Scheduler, WP-Cron, or the queue a framework provides). WordPress serves the nearest size it has in the meantime |
 | `wp_privacy_exports_dir`, `wp_privacy_exports_url`, `wp_privacy_personal_data_export_file_created`, `wp_privacy_delete_old_export_files` | The personal data export builds its archive locally (`ZipArchive` cannot write to a wrapper), copies it to the disk, links it through the public URL, and the old archives are deleted from the disk |
 
+| `wp_get_attachment_url`, `wp_get_attachment_image_src`, `wp_calculate_image_srcset` | Private media only: the URL, the URL of a size and every source of a `srcset` are signed and expire. A public media keeps its plain URL, and nothing is asked of the disk to tell them apart |
+| `wp_generate_attachment_metadata` | A media created private (see below) is private on the disk from the start |
+
 The `pollora://` wrapper sends a file to the disk when its stream is closed, in one write. Directories do not exist on an object store, so they are virtual and answer without asking the disk (a path with an extension is a file); what is asked about a file is remembered for the rest of the request. A file written or read during a request, up to 16 MiB, is also kept in a local copy until the request ends: WordPress reads an uploaded image again for its size, its EXIF data, its sizes and its metadata, and none of it goes back to the disk. One upload of an image with nine sizes costs ten writes and a handful of existence checks; a read of the original, a stat or a listing never happens. Both the GD and the Imagick editors of WordPress work on the wrapper as they are.
 
 The wrapper's root is `pollora://uploads`: WordPress trims the trailing slashes of the base it is given, which would turn `pollora://` into a path on the local disk. A path with or without that first segment reaches the same file.
@@ -95,6 +98,40 @@ The wrapper's root is `pollora://uploads`: WordPress trims the trailing slashes 
 - A plugin that writes under `WP_CONTENT_DIR . '/uploads'` by hand ignores `upload_dir`, so its files stay local. A plugin that uses `ZipArchive` or a C library on a path fails on a stream wrapper.
 - Files written by WooCommerce in `uploads/wc-logs` go through the wrapper too; keep the logs on a local path.
 
+## Private media
+
+A media is private when its post meta `_pollora_media_private` is `1`, or when the `pollora/media/is_private` filter says so. A private media is served through a signed URL (`Flysystem`'s `temporaryUrl()`: an S3 pre-signed URL) that expires after `POLLORA_MEDIA_PRIVATE_EXPIRY` (`+6 hours` by default). The flag is read with the attachment and asked once per media in a request: the signature is computed for private media only, and no call to the disk is made to tell a private media from a public one.
+
+The module gives no screen to mark a media private. Three ways to do it:
+
+```php
+// 1. From code: every file of the media changes on the disk, then the media itself
+(new \Pollora\Media\Infrastructure\WordPress\PrivateMedia(...))->setPrivate($attachmentId, true);
+
+// 2. By rule, for every media: a media created private is private on the disk from the start
+add_filter('pollora/media/is_private', fn (bool $private, int $id) => get_post_meta($id, 'invoice', true) !== '', 10, 2);
+```
+
+```bash
+# 3. From the command line
+wp pollora media visibility 42 --private
+wp pollora media visibility 42 --public
+wp pollora media files 42
+```
+
+Hooks to build on it:
+
+| Hook | Role |
+|---|---|
+| `pollora/media/is_private` (filter) | `(bool $private, int $attachmentId)`: the visibility of a media |
+| `pollora/media/signed_url` (filter) | `(string $url, int $attachmentId)`: the final signed URL, for a CDN with its own signature |
+| `pollora/media/attachment_files` (filter) | `(array $paths, int $attachmentId)`: files kept next to a media, which follow it when it is deleted or changes visibility |
+| `pollora/media/stored` (action) | `($path, $size)`: a file is on the disk |
+| `pollora/media/deleted` (action) | `($attachmentId, $paths)`: a media and its files were deleted |
+| `pollora/media/visibility_changed` (action) | `($attachmentId, $private)`: a media changed visibility. Used to audit changes or purge a CDN, in a package of its own |
+
+A disk that cannot sign a URL (a plain local disk) serves the plain URL of a private media, rather than a broken one: a private media needs an object store, or a signature of your own through `pollora/media/signed_url`.
+
 ## Commands
 
 ```bash
@@ -102,6 +139,8 @@ wp pollora media status                       # the public URL, and a test write
 wp pollora media migrate                      # dry run: what would be copied from the uploads folder
 wp pollora media migrate --execute            # copy the files; the source is never changed
 wp pollora media migrate --execute --replace-urls --old-url=https://site.test/content/uploads
+wp pollora media files <id>                   # the files of a media: original, sizes, declared files
+wp pollora media visibility <id> --private    # or --public
 ```
 
 `migrate` skips a file already on the target with the same size, so it can be repeated. `--replace-urls` replaces the old base URL in post content and excerpts and in post, term and user meta and options, serialized values and the JSON of blocks included; the `guid` is left alone. Without `--execute`, nothing is written.

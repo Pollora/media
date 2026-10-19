@@ -19,22 +19,35 @@ final class WordPressMedia
 {
     private readonly LegacyUrlRewriter $legacy;
 
+    private readonly AttachmentFiles $files;
+
+    private readonly PrivateMedia $private;
+
+    /** @var array<int, list<string>> Files of the media being deleted, kept until WordPress has deleted it */
+    private array $deleting = [];
+
     public function __construct(
         private readonly MediaStorage $storage,
         private readonly MediaConfig $config,
         private readonly ?Action $action = null,
     ) {
         $this->legacy = new LegacyUrlRewriter($config);
+        $this->files = new AttachmentFiles;
+        $this->private = new PrivateMedia($storage, $config, $this->files);
     }
 
     public function register(): void
     {
-        StreamWrapper::register($this->storage, $this->config);
+        StreamWrapper::register($this->storage, $this->config, static function (string $path, int $size): void {
+            \do_action('pollora/media/stored', $path, $size);
+        });
 
         \add_filter('upload_dir', [$this, 'uploadDir']);
         \add_filter('pre_wp_unique_filename_file_list', [$this, 'uniqueFilenameFileList'], 10, 3);
         \add_filter('wp_resource_hints', [$this, 'resourceHints'], 10, 2);
         \add_action('delete_attachment', [$this, 'deleteAttachment'], 10, 1);
+        \add_action('deleted_post', [$this, 'deletedPost'], 10, 2);
+        $this->private->register();
 
         if (defined('WP_CLI') && WP_CLI && class_exists(\WP_CLI::class)) {
             \WP_CLI::add_command('pollora media', new MediaCommand(
@@ -42,6 +55,8 @@ final class WordPressMedia
                 $this->config,
                 rtrim((string) $this->constant('WP_CONTENT_DIR'), '/').'/uploads',
                 rtrim((string) $this->constant('WP_CONTENT_URL'), '/').'/uploads',
+                $this->private,
+                $this->files,
             ));
         }
 
@@ -103,6 +118,7 @@ final class WordPressMedia
     public function deleteAttachment(int $attachmentId): void
     {
         $files = \apply_filters('pollora/media/attachment_files', [], $attachmentId);
+        $this->deleting[$attachmentId] = $this->files->for($attachmentId);
 
         foreach (is_array($files) ? $files : [] as $path) {
             try {
@@ -115,6 +131,22 @@ final class WordPressMedia
                 continue;
             }
         }
+    }
+
+    /**
+     * Tells the files of a media that WordPress has deleted, once it has.
+     */
+    public function deletedPost(int $postId, mixed $post = null): void
+    {
+        if (isset($this->deleting[$postId])) {
+            \do_action('pollora/media/deleted', $postId, $this->deleting[$postId]);
+            unset($this->deleting[$postId]);
+        }
+    }
+
+    public function privateMedia(): PrivateMedia
+    {
+        return $this->private;
     }
 
     /**

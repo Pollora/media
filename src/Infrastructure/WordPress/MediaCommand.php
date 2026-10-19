@@ -29,6 +29,8 @@ final class MediaCommand
         private readonly MediaConfig $config,
         private readonly string $localUploadsPath,
         private readonly string $localUploadsUrl,
+        private readonly PrivateMedia $private,
+        private readonly AttachmentFiles $files,
     ) {}
 
     /**
@@ -45,6 +47,65 @@ final class MediaCommand
         $status['writable']
             ? WP_CLI::success('The disk takes a file, gives it back and deletes it.')
             : WP_CLI::error('The disk does not take a file: '.$status['error']);
+    }
+
+    /**
+     * List the files of a media: the original, each size, and the files a plugin declared with it.
+     *
+     * ## OPTIONS
+     *
+     * <id>
+     * : The attachment ID.
+     *
+     * @when after_wp_load
+     *
+     * @param  array<int, string>  $args
+     */
+    public function files(array $args): void
+    {
+        $id = (int) $args[0];
+        $visibility = $this->private->isPrivate($id) ? 'private' : 'public';
+
+        WP_CLI::log(sprintf('Media %d is %s.', $id, $visibility));
+
+        foreach ($this->files->for($id) as $file) {
+            WP_CLI::log($file.($this->storage->exists($file) ? '' : '  (not on the disk)'));
+        }
+    }
+
+    /**
+     * Make a media private or public: every file of it changes on the disk.
+     *
+     * A private media is served through a signed URL that expires.
+     *
+     * ## OPTIONS
+     *
+     * <id>
+     * : The attachment ID.
+     *
+     * [--private]
+     * : Make it private.
+     *
+     * [--public]
+     * : Make it public (the default).
+     *
+     * @when after_wp_load
+     *
+     * @param  array<int, string>  $args
+     * @param  array<string, mixed>  $assoc
+     */
+    public function visibility(array $args, array $assoc): void
+    {
+        $private = isset($assoc['private']);
+        $report = $this->private->setPrivate((int) $args[0], $private);
+
+        WP_CLI::log(sprintf('%d file(s) made %s.', count($report['changed']), $private ? 'private' : 'public'));
+
+        foreach ($report['failed'] as $file) {
+            WP_CLI::warning('Not changed: '.$file);
+        }
+
+        $report['failed'] === [] ? WP_CLI::success('Done.') : WP_CLI::halt(1);
     }
 
     /**
