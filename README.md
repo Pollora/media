@@ -98,6 +98,44 @@ The wrapper's root is `pollora://uploads`: WordPress trims the trailing slashes 
 - A plugin that writes under `WP_CONTENT_DIR . '/uploads'` by hand ignores `upload_dir`, so its files stay local. A plugin that uses `ZipArchive` or a C library on a path fails on a stream wrapper.
 - Files written by WooCommerce in `uploads/wc-logs` go through the wrapper too; keep the logs on a local path.
 
+## Image sizes
+
+Declare the sizes your design uses, instead of leaving WordPress to make every size for every image:
+
+```php
+use Pollora\Media\ImageSize;   // in Pollora: Pollora\Support\Facades\ImageSize
+
+ImageSize::add('card')->cover(600, 400)->webp(75);
+ImageSize::add('hero')->scale(width: 1920)->webp(70)->widths([640, 1024, 1440]);
+ImageSize::add('thumb')->cover(150, 150)->eager();
+```
+
+| Option | Role | Default |
+|---|---|---|
+| `cover(w, h)`, `scale(width:, height:)`, `contain(w, h)` | How the image fits: crop to the box, resize keeping the ratio, fit inside the box | none: one is required |
+| `webp(q)`, `avif(q)`, `original()` | The format of the file and its quality | WebP, quality 80 |
+| `widths([...])` | Extra widths for a `srcset`, each a bounded size of its own | none |
+| `eager()` | Made when the image is uploaded | all declared sizes are, until sizes can be made on demand |
+| `upscale()` | Allow enlarging an original smaller than the size | off: `scale()` and `contain()` never enlarge, and `cover()` keeps the ratio of the box at the size the original allows |
+
+A size is used by its name, as any WordPress size: `wp_get_attachment_image($id, 'card')`, `the_post_thumbnail('hero')`, `wp_get_attachment_image_src()`.
+
+**The URL of a size is worked out, never read.** It comes from the metadata of the original (its file, width and height), whether the file of the size exists or not: `photo-card-600x400-{signature}.webp`. The signature is an HMAC of the original and of the parameters of the size, cut to 12 characters (the application key in Pollora, a salt of WordPress otherwise): changing a size changes its name, so no cache holds a stale file. The `width`, `height` and `srcset` WordPress writes come from the same computation, with no call to the disk.
+
+The sizes WordPress registers itself (`add_image_size()`, a theme's `config/images.php`, WooCommerce, the core sizes) are left as they are, with the names WordPress gives them, so a theme keeps its output until it declares sizes of its own. A declared size of the same name replaces the WordPress one. A GIF is never resized, which would stop its animation: its sizes are the original.
+
+An image uploaded before a size was declared has no file for it yet. Make them with the commands below, before a heavy page goes live:
+
+```bash
+wp pollora media thumbs warm --size=card --since=2026-01-01   # the missing files, for the images already uploaded
+wp pollora media thumbs prune                                 # dry run: the files of a size that was changed or removed
+wp pollora media thumbs prune --execute
+```
+
+`prune` only considers files named the way the module names its sizes, next to an original that is still there: whatever WordPress or a plugin made is left alone.
+
+The format needs an image editor that can write it: GD and Imagick write WebP; AVIF depends on the server. A size that cannot be written is logged and left out of the metadata.
+
 ## Private media
 
 A media is private when its post meta `_pollora_media_private` is `1`, or when the `pollora/media/is_private` filter says so. A private media is served through a signed URL (`Flysystem`'s `temporaryUrl()`: an S3 pre-signed URL) that expires after `POLLORA_MEDIA_PRIVATE_EXPIRY` (`+6 hours` by default). The flag is read with the attachment and asked once per media in a request: the signature is computed for private media only, and no call to the disk is made to tell a private media from a public one.
