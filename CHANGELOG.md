@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-19
+
 ### Added
 
 - Sizes made by a service: the `bunny` driver (`photo.jpg?class=card`, an image class of Bunny Optimizer) and the `imgproxy` driver (a URL signed with HMAC-SHA256 that names a preset, for imgproxy 4.0.x in presets-only mode; the source is the URL of the library or an `s3://` object), chosen with `POLLORA_MEDIA_THUMBNAILS_DRIVER`. No file is made, no fallback route is registered, and `thumbs warm` has nothing to do. The signature follows the documented vector, with `IMGPROXY_SIGNATURE_SIZE`
