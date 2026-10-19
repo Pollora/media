@@ -11,8 +11,10 @@ use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\BunnyClasses;
 
 /**
- * Bunny Optimizer: the URL of a size is the URL of the original and the name of an image class
- * (`photo.jpg?class=card`). The class is defined at Bunny (`thumbs export`), not here: no file is made.
+ * Bunny Optimizer: the URL of a size is the URL of the original, the name of an image class and the version of
+ * the size (`photo.jpg?class=card&v=3f9a1c2b`). Bunny ignores `v`, but its cache does not: without it, a class
+ * that was changed keeps being served as it was under the same URL. The class is defined at Bunny
+ * (`thumbs export`), not here: no file is made.
  *
  * Bunny accepts only letters and digits in the name of a class, so the class of `hero-640w` is `hero640w`;
  * two sizes whose classes would be the same cannot both be served, and the second is refused.
@@ -30,7 +32,7 @@ final readonly class BunnyThumbnailDriver implements ThumbnailDriver
 
     public function url(string $originalKey, ImageSizeSpec $spec, int $originalWidth, int $originalHeight): string
     {
-        return $this->config->url.'/'.ltrim($originalKey, '/').'?class='.$this->classes->className($spec->name);
+        return $this->config->url.'/'.ltrim($originalKey, '/').'?class='.$this->classes->className($spec->name).'&v='.$spec->version();
     }
 
     public function makesFiles(): bool

@@ -42,7 +42,7 @@ final readonly class ImgproxyThumbnailDriver implements ThumbnailDriver
         };
         $path = '/'.$spec->name.'/plain/'.strtr($source, ['%' => '%25', '?' => '%3F', '@' => '%40']).$extension;
 
-        return $this->baseUrl.'/'.$this->signer->sign($path).$path;
+        return $this->baseUrl.'/'.$this->signer->sign($path).$path.'?v='.$spec->version();
     }
 
     public function makesFiles(): bool

@@ -17,15 +17,24 @@ beforeEach(function (): void {
     $this->card = $this->sizes->get('card');
 });
 
-it('is the URL of the original and the name of the class', function (): void {
-    expect($this->driver->url('2026/10/photo.jpg', $this->card, 3000, 2000))->toBe('https://media.client.fr/2026/10/photo.jpg?class=card');
+it('is the URL of the original, the name of the class and the version of the size', function (): void {
+    expect($this->driver->url('2026/10/photo.jpg', $this->card, 3000, 2000))->toBe('https://media.client.fr/2026/10/photo.jpg?class=card&v='.$this->card->version());
+});
+
+it('changes URL when the size changes, so a CDN never serves the old one (checked on a real zone: the cache keeps the old class under the same URL)', function (): void {
+    $sharper = new ImageSizeSpec('card', Fit::Cover, 600, 400, quality: 95);
+    $same = new ImageSizeSpec('card', Fit::Cover, 600, 400);
+
+    expect($this->driver->url('a.jpg', $sharper, 3000, 2000))->not->toBe($this->driver->url('a.jpg', $this->card, 3000, 2000))
+        ->and($this->driver->url('a.jpg', $same, 3000, 2000))->toBe($this->driver->url('a.jpg', $this->card, 3000, 2000))
+        ->and($this->card->version())->toMatch('/^[0-9a-f]{8}$/');
 });
 
 it('keeps only letters and digits in the class, which is all Bunny accepts (checked against the API: "Invalid class name")', function (): void {
     $variant = $this->sizes->withVariants()['hero-640w'];
 
-    expect($this->driver->url('a.jpg', $variant, 3000, 2000))->toEndWith('?class=hero640w')
-        ->and($this->driver->url('a.jpg', $this->sizes->get('my_size'), 3000, 2000))->toEndWith('?class=mysize');
+    expect($this->driver->url('a.jpg', $variant, 3000, 2000))->toContain('?class=hero640w&v=')
+        ->and($this->driver->url('a.jpg', $this->sizes->get('my_size'), 3000, 2000))->toContain('?class=mysize&v=');
 });
 
 it('does not make files', function (): void {
@@ -36,6 +45,7 @@ it('finds the declared size a class stands for, and nothing else', function (): 
     expect($this->driver->sizeOf('https://media.client.fr/2026/10/photo.jpg?class=hero640w'))->toBe('hero-640w')
         ->and($this->driver->sizeOf('https://media.client.fr/2026/10/photo.jpg?class=mysize'))->toBe('my_size')
         ->and($this->driver->sizeOf('https://media.client.fr/2026/10/photo.jpg?class=card'))->toBe('card')
+        ->and($this->driver->sizeOf($this->driver->url('2026/10/photo.jpg', $this->card, 3000, 2000)))->toBe('card')
         ->and($this->driver->sizeOf('https://media.client.fr/2026/10/photo.jpg?class=nope'))->toBeNull()
         ->and($this->driver->sizeOf('https://media.client.fr/2026/10/photo.jpg'))->toBeNull()
         ->and($this->driver->sizeOf('https://media.client.fr/2026/10/photo.jpg?width=300'))->toBeNull()

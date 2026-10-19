@@ -50,4 +50,14 @@ final readonly class ImageSizeSpec
     {
         return implode('|', [$this->fit->value, $this->width ?? '', $this->height ?? '', $this->format->value, $this->quality, (int) $this->upscale]);
     }
+
+    /**
+     * A short tag that changes when the size does, for the URL of a service that makes the size (the URL of
+     * a file of the module changes by its name). Without it a CDN keeps serving the old size under the same
+     * URL after a class or a preset was changed: checked on a real Bunny pull zone.
+     */
+    public function version(): string
+    {
+        return substr(sha1($this->fingerprint()), 0, 8);
+    }
 }
