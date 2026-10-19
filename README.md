@@ -1,6 +1,17 @@
-# pollora/media
+<p align="center">
+  <a href="https://pollora.dev">
+    <img src="https://raw.githubusercontent.com/Pollora/.github/main/brand/banners/media.png" width="100%" alt="Pollora Media: WordPress media on any disk, behind two settings">
+  </a>
+</p>
 
-WordPress media on any Flysystem disk (local, S3, R2, Scaleway…), behind two settings: the disk and the public URL. It runs with or without Laravel.
+<p align="center">
+  <a href="https://packagist.org/packages/pollora/media"><img src="https://img.shields.io/packagist/v/pollora/media" alt="Latest version"></a>
+  <a href="https://packagist.org/packages/pollora/media"><img src="https://img.shields.io/packagist/dt/pollora/media" alt="Total downloads"></a>
+  <a href="https://github.com/Pollora/media/actions/workflows/tests.yml"><img src="https://github.com/Pollora/media/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Pollora/media" alt="License"></a>
+</p>
+
+WordPress media on any Flysystem disk (local, S3, R2, Scaleway…), behind two settings: the disk and the public URL. WordPress goes on using its own file functions through a `pollora://` stream wrapper and the `upload_dir` filter, so Gutenberg, ACF, Meta Box, WooCommerce and imports follow without adaptation, and a media URL is the public URL and a relative path, never asked to the disk.
 
 > Part of [Pollora](https://pollora.dev), the Laravel framework for WordPress, where it is installed and wired for you from `config/media.php`. It runs without Laravel too: in a plugin, a Bedrock site or any PHP project.
 
