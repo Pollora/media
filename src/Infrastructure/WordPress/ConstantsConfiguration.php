@@ -10,6 +10,7 @@ use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use RuntimeException;
 
 /**
@@ -28,6 +29,9 @@ use RuntimeException;
  * | `POLLORA_MEDIA_PRIVATE_EXPIRY`    | life of a signed URL                            |
  * | `POLLORA_MEDIA_ASYNC_THUMBNAILS`  | generate sizes after the upload                 |
  * | `POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS`, `_MAX_BYTES`, `_CONCURRENCY`, `_WAIT` | limits of a size made on demand |
+ * | `POLLORA_MEDIA_THUMBNAILS_DRIVER` | who makes the sizes: `pollora` (default), `bunny` or `imgproxy` |
+ * | `POLLORA_MEDIA_BUNNY_PULL_ZONE`, `_API_KEY` | pull zone and access key, to export the classes only |
+ * | `POLLORA_MEDIA_IMGPROXY_URL`, `_KEY`, `_SALT`, `_SIGNATURE_SIZE`, `_SOURCE` | imgproxy: URL, hexadecimal key and salt, signature size (32), source `url` or `s3` |
  * | `POLLORA_MEDIA_DRIVER`            | `local` (default) or `s3`                       |
  * | `POLLORA_MEDIA_ROOT`              | local folder of the library                     |
  * | `POLLORA_MEDIA_BUCKET`, `_REGION`, `_KEY`, `_SECRET`, `_ENDPOINT`, `_PATH_STYLE` | S3 and compatible services |
@@ -68,6 +72,24 @@ final class ConstantsConfiguration
             (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_BYTES') ?? $defaults->maxBytes),
             (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_CONCURRENCY') ?? $defaults->concurrency),
             (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_WAIT') ?? $defaults->wait),
+        );
+    }
+
+    public function thumbnailDriver(): ThumbnailDriverSettings
+    {
+        $source = (string) ($this->read('POLLORA_MEDIA_IMGPROXY_SOURCE') ?? 'url');
+        $bucket = $this->read('POLLORA_MEDIA_BUCKET');
+
+        return new ThumbnailDriverSettings(
+            (string) ($this->read('POLLORA_MEDIA_THUMBNAILS_DRIVER') ?? ThumbnailDriverSettings::POLLORA),
+            $this->optional('POLLORA_MEDIA_BUNNY_PULL_ZONE'),
+            $this->optional('POLLORA_MEDIA_BUNNY_API_KEY'),
+            $this->optional('POLLORA_MEDIA_IMGPROXY_URL'),
+            $this->optional('POLLORA_MEDIA_IMGPROXY_KEY'),
+            $this->optional('POLLORA_MEDIA_IMGPROXY_SALT'),
+            (int) ($this->read('POLLORA_MEDIA_IMGPROXY_SIGNATURE_SIZE') ?? 32),
+            $source,
+            $source === 's3' && is_string($bucket) && $bucket !== '' ? $bucket : null,
         );
     }
 
@@ -126,5 +148,12 @@ final class ConstantsConfiguration
     private function read(string $name): mixed
     {
         return ($this->constant)($name);
+    }
+
+    private function optional(string $name): ?string
+    {
+        $value = $this->read($name);
+
+        return $value === null || $value === '' ? null : (string) $value;
     }
 }

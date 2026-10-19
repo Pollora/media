@@ -22,4 +22,14 @@ interface ThumbnailDriver
      * Whether the sizes are files of the library, made by the module, rather than a URL a service resolves.
      */
     public function makesFiles(): bool;
+
+    /**
+     * The name of the declared size a URL of this driver stands for, or null when the URL is not one it made.
+     */
+    public function sizeOf(string $url): ?string;
+
+    /**
+     * Why the driver cannot serve a size, or null when it can. A size it refuses is left to WordPress.
+     */
+    public function refusal(ImageSizeSpec $spec): ?string;
 }

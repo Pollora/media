@@ -6,6 +6,7 @@ use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Infrastructure\WordPress\StreamWrapper;
 use Pollora\Media\Infrastructure\WordPress\WordPressMedia;
 use Pollora\Media\Tests\Fixtures\TemporaryStorage;
@@ -155,3 +156,41 @@ it('deletes the sizes made on demand with the media, though WordPress does not k
 
     expect($this->disk->storage->exists($file))->toBeFalse();
 });
+
+it('answers a missing size on its own route with the default driver', function (): void {
+    Brain\Monkey\Actions\expectAdded('parse_request')->once();
+
+    $this->media->register();
+});
+
+it('registers no fallback route when a service makes the sizes', function (ThumbnailDriverSettings $settings): void {
+    $media = new WordPressMedia($this->disk->storage, $this->config, thumbnails: $settings);
+    Brain\Monkey\Actions\expectAdded('parse_request')->never();
+
+    $media->register();
+
+    expect($media->thumbnailDriver()->makesFiles())->toBeFalse();
+})->with([
+    'bunny' => [new ThumbnailDriverSettings(driver: 'bunny')],
+    'imgproxy' => [new ThumbnailDriverSettings(driver: 'imgproxy', imgproxyUrl: 'https://img.client.fr', imgproxyKey: '736563726574', imgproxySalt: '68656C6C6F')],
+]);
+
+it('keeps the default driver, and says why, when the driver of the sizes is badly set up', function (ThumbnailDriverSettings $settings): void {
+    $log = tempnam(sys_get_temp_dir(), 'media-log');
+    $previous = ini_set('error_log', $log);
+
+    try {
+        $media = new WordPressMedia($this->disk->storage, $this->config, thumbnails: $settings);
+    } finally {
+        ini_set('error_log', (string) $previous);
+    }
+
+    expect($media->thumbnailDriver()->makesFiles())->toBeTrue()
+        ->and((string) file_get_contents($log))->toContain('The default driver is used')->not->toContain('736563726574');
+    unlink($log);
+})->with([
+    'imgproxy without a URL' => [new ThumbnailDriverSettings(driver: 'imgproxy', imgproxyKey: '736563726574', imgproxySalt: '68656C6C6F')],
+    'imgproxy with a key that is not hexadecimal' => [new ThumbnailDriverSettings(driver: 'imgproxy', imgproxyUrl: 'https://img.client.fr', imgproxyKey: 'secret', imgproxySalt: '68656C6C6F')],
+    'imgproxy on s3 without a bucket' => [new ThumbnailDriverSettings(driver: 'imgproxy', imgproxyUrl: 'https://img.client.fr', imgproxyKey: '736563726574', imgproxySalt: '68656C6C6F', imgproxySource: 's3')],
+    'unknown driver' => [new ThumbnailDriverSettings(driver: 'cloudfront')],
+]);

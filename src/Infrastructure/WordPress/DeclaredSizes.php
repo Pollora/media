@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure\WordPress;
 
+use Closure;
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
@@ -31,12 +32,16 @@ final class DeclaredSizes
 
     private readonly ThumbnailDriver $driver;
 
+    /**
+     * @param  (Closure(int): bool)|null  $isPrivate  Whether an attachment is private: a private media never goes to a service that makes the sizes
+     */
     public function __construct(
         private readonly ImageSizes $sizes,
         private readonly MediaConfig $config,
         private readonly MediaStorage $storage,
         private readonly ImageProcessor $processor,
         ?ThumbnailDriver $driver = null,
+        private readonly ?Closure $isPrivate = null,
     ) {
         $this->geometry = new SizeGeometry;
         $this->driver = $driver ?? new PolloraThumbnailDriver($sizes->names(), $config);
@@ -106,6 +111,10 @@ final class DeclaredSizes
 
         $spec = $this->known()[$size];
 
+        if ($this->driver->refusal($spec) !== null || $this->isKeptFromService($attachmentId)) {
+            return false;
+        }
+
         if ($this->isGif($metadata)) {
             return [$this->url((string) $metadata['file']), (int) $metadata['width'], (int) $metadata['height'], false];
         }
@@ -125,14 +134,12 @@ final class DeclaredSizes
      */
     public function srcset(array|false $sources, array $sizeArray, string $imageSrc, array $imageMeta, int $attachmentId): array|false
     {
-        $prefix = $this->config->url.'/';
-
-        if ($sources === false || ! str_starts_with($imageSrc, $prefix) || ! $this->isImage($imageMeta)) {
+        if ($sources === false || ! $this->isImage($imageMeta) || $this->isKeptFromService($attachmentId)) {
             return $sources;
         }
 
-        $parsed = $this->sizes->names()->parse(substr($imageSrc, strlen($prefix)));
-        $spec = $parsed === null ? null : ($this->known()[$parsed['name']] ?? null);
+        $name = $this->driver->sizeOf($imageSrc);
+        $spec = $name === null ? null : ($this->known()[$name] ?? null);
         $base = $spec === null ? null : ($this->sizes->get($spec->name) ?? $this->parentOf($spec));
 
         if (! $base instanceof ImageSizeSpec || $base->widths === []) {
@@ -241,16 +248,21 @@ final class DeclaredSizes
         return $this->isImage($metadata) && ! $this->isGif($metadata);
     }
 
+    /**
+     * @return array<string, ImageSizeSpec>
+     */
     private function known(): array
     {
-        $known = [];
+        return $this->sizes->withVariants();
+    }
 
-        foreach ($this->sizes->all() as $name => $spec) {
-            $known[$name] = $spec;
-            $known += $this->sizes->variantsOf($spec);
-        }
-
-        return $known;
+    /**
+     * Whether the sizes of this media must not be asked of a service that makes them: a private media
+     * would be fetched, and served, by a service that has no notion of who may see it.
+     */
+    private function isKeptFromService(int $attachmentId): bool
+    {
+        return ! $this->driver->makesFiles() && $this->isPrivate !== null && ($this->isPrivate)($attachmentId);
     }
 
     private function parentOf(ImageSizeSpec $variant): ?ImageSizeSpec
