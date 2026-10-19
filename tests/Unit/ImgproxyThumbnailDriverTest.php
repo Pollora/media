@@ -20,22 +20,22 @@ it('builds a signed presets-only URL: signature, preset, plain source, output ex
     $path = '/card/plain/https://media.client.fr/2026/10/photo.jpg@webp';
 
     expect($this->driver->url('2026/10/photo.jpg', $this->card, 3000, 2000))
-        ->toBe('https://img.client.fr/'.$this->signer->sign($path).$path);
+        ->toBe('https://img.client.fr/'.$this->signer->sign($path).$path.'?v='.$this->card->version());
 });
 
 it('writes the extension of the format of the size, and none for the original format', function (): void {
     $avif = new ImageSizeSpec('hero', Fit::Scale, 1920, null, OutputFormat::Avif);
     $original = new ImageSizeSpec('raw', Fit::Scale, 800, null, OutputFormat::Original);
 
-    expect($this->driver->url('a.jpg', $avif, 3000, 2000))->toEndWith('/hero/plain/https://media.client.fr/a.jpg@avif')
-        ->and($this->driver->url('a.jpg', $original, 3000, 2000))->toEndWith('/raw/plain/https://media.client.fr/a.jpg');
+    expect($this->driver->url('a.jpg', $avif, 3000, 2000))->toContain('/hero/plain/https://media.client.fr/a.jpg@avif?v=')
+        ->and($this->driver->url('a.jpg', $original, 3000, 2000))->toContain('/raw/plain/https://media.client.fr/a.jpg?v=');
 });
 
 it('escapes what imgproxy would read as syntax in a plain source: percent, question mark and at sign', function (): void {
     $url = $this->driver->url('2026/10/photo@2x 100%.jpg', $this->card, 3000, 2000);
     $path = '/card/plain/https://media.client.fr/2026/10/photo%402x 100%25.jpg@webp';
 
-    expect($url)->toBe('https://img.client.fr/'.$this->signer->sign($path).$path)
+    expect($url)->toBe('https://img.client.fr/'.$this->signer->sign($path).$path.'?v='.$this->card->version())
         ->and($this->driver->url('a?b.jpg', $this->card, 3000, 2000))->toContain('a%3Fb.jpg@webp');
 });
 
@@ -43,7 +43,7 @@ it('points at the object of the bucket when the source is s3', function (): void
     $driver = new ImgproxyThumbnailDriver($this->signer, $this->config, 'https://img.client.fr', 'client-media');
     $path = '/card/plain/s3://client-media/2026/10/photo.jpg@webp';
 
-    expect($driver->url('2026/10/photo.jpg', $this->card, 3000, 2000))->toBe('https://img.client.fr/'.$this->signer->sign($path).$path);
+    expect($driver->url('2026/10/photo.jpg', $this->card, 3000, 2000))->toBe('https://img.client.fr/'.$this->signer->sign($path).$path.'?v='.$this->card->version());
 });
 
 it('does not make files', function (): void {
@@ -62,4 +62,13 @@ it('finds the size a URL it made stands for, and nothing else', function (): voi
 it('refuses a size named default, which imgproxy applies to every image', function (): void {
     expect($this->driver->refusal(new ImageSizeSpec('default', Fit::Scale, 100, null)))->toContain('default')
         ->and($this->driver->refusal($this->card))->toBeNull();
+});
+
+it('changes URL when the size changes, without changing the signature of the path', function (): void {
+    $sharper = new ImageSizeSpec('card', Fit::Cover, 600, 400, quality: 95);
+    $before = $this->driver->url('a.jpg', $this->card, 3000, 2000);
+    $after = $this->driver->url('a.jpg', $sharper, 3000, 2000);
+
+    expect($after)->not->toBe($before)
+        ->and(strstr($after, '?', true))->toBe(strstr($before, '?', true));
 });
