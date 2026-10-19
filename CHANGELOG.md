@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-19
+
 ### Added
 
 - A local copy of every file written or read during a request, up to 16 MiB (`StreamWrapper::limitLocalCopies()`), removed at the end of the request, and the size and date of a file written are known without asking the disk. An upload of an image with nine sizes drops from about 70 round trips to the disk besides the writes (37 existence checks, 20 stats, 12 reads) to a handful of existence checks; both WordPress image editors (GD and Imagick) work on the wrapper as they are
