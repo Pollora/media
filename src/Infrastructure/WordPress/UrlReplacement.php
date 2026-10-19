@@ -43,6 +43,25 @@ final class UrlReplacement
      */
     public function replace(string $search, string $replace, bool $dryRun = true): array
     {
+        // Block attributes store the URL as JSON, with escaped slashes: both forms are the same address.
+        $changed = $this->pass($search, $replace, $dryRun);
+
+        foreach ($this->pass(str_replace('/', '\\/', $search), str_replace('/', '\\/', $replace), $dryRun) as $where => $count) {
+            $changed[$where] += $count;
+        }
+
+        if (! $dryRun && function_exists('wp_cache_flush')) {
+            \wp_cache_flush();
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function pass(string $search, string $replace, bool $dryRun): array
+    {
         $changed = [];
 
         foreach (self::TARGETS as ['table' => $table, 'id' => $id, 'column' => $column]) {
