@@ -33,6 +33,7 @@
         "laravel/pint": "^1.22.1",
         "mockery/mockery": "^1.6.12",
         "pestphp/pest": "^3.8.2",
+        "php-stubs/wp-cli-stubs": "dev-master",
         "phpstan/phpstan": "^2.1.16",
         "szepeviktor/phpstan-wordpress": "^2.0"
     },

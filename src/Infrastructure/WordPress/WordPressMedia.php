@@ -34,6 +34,15 @@ final class WordPressMedia
         \add_filter('wp_resource_hints', [$this, 'resourceHints'], 10, 2);
         \add_action('delete_attachment', [$this, 'deleteAttachment'], 10, 1);
 
+        if (defined('WP_CLI') && WP_CLI && class_exists(\WP_CLI::class)) {
+            \WP_CLI::add_command('pollora media', new MediaCommand(
+                $this->storage,
+                $this->config,
+                rtrim((string) $this->constant('WP_CONTENT_DIR'), '/').'/uploads',
+                rtrim((string) $this->constant('WP_CONTENT_URL'), '/').'/uploads',
+            ));
+        }
+
         if ($this->legacy->isActive()) {
             \add_filter('the_content', [$this, 'content'], 9);
             \add_filter('render_block', [$this, 'block'], 10, 2);
@@ -119,6 +128,11 @@ final class WordPressMedia
         $hint = '//'.$host;
 
         return in_array($hint, $urls, true) ? $urls : [...$urls, $hint];
+    }
+
+    private function constant(string $name): string
+    {
+        return defined($name) ? (string) constant($name) : '';
     }
 
     public function content(string $content): string
