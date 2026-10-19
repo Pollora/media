@@ -106,3 +106,15 @@ it('recognises the files it names, and the signature they carry', function (): v
         ->and($name->parse('2026/10/my-photo.jpg'))->toBeNull()
         ->and($name->parse('2026/10/photo-150x150.jpg'))->toBeNull();
 });
+
+it('recognises the file of an extra width as that size, and a stem with dashes as a stem', function (): void {
+    $name = new SizedFileName(fn (): string => 'secret-key');
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('hero')->scale(width: 1920)->widths([400]);
+    $variant = $sizes->variantsOf($sizes->get('hero'))['hero-400w'];
+
+    $parsed = $name->parse($name->for('2026/10/my-photo-2.jpg', $variant, 3000, 2000));
+
+    expect($parsed)->toMatchArray(['stem' => 'my-photo-2', 'name' => 'hero-400w', 'width' => 400, 'height' => 267])
+        ->and($name->parse($name->for('my-photo.jpg', $sizes->get('hero'), 3000, 2000)))->toMatchArray(['stem' => 'my-photo', 'name' => 'hero', 'directory' => '']);
+});

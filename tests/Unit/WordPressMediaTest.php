@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
+use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Infrastructure\WordPress\StreamWrapper;
 use Pollora\Media\Infrastructure\WordPress\WordPressMedia;
@@ -138,4 +139,19 @@ it('tells the library of each file stored, with its path and size', function ():
     $this->media->register();
 
     file_put_contents('pollora://uploads/2026/10/a.jpg', 'bytes');
+});
+
+it('deletes the sizes made on demand with the media, though WordPress does not know them', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('card')->cover(600, 400);
+    $media = new WordPressMedia($this->disk->storage, $this->config, null, $sizes);
+    $meta = ['file' => '2026/10/photo.jpg', 'width' => 3000, 'height' => 2000];
+    $file = $sizes->names()->for('2026/10/photo.jpg', $sizes->get('card'), 3000, 2000);
+    mkdir($this->disk->root.'/2026/10', 0777, true);
+    $this->disk->storage->write($file, 'made on demand');
+    Functions\when('wp_get_attachment_metadata')->justReturn($meta);
+
+    $media->deleteAttachment(9);
+
+    expect($this->disk->storage->exists($file))->toBeFalse();
 });

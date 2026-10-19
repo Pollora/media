@@ -7,11 +7,14 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use Pollora\Hook\Domain\Contract\Action;
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Application\Services\SizePruner;
+use Pollora\Media\Application\Services\ThumbnailLimits;
+use Pollora\Media\Application\Services\ThumbnailService;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\LegacyUrlRewriter;
 use Pollora\Media\ImageSize;
+use Pollora\Media\Infrastructure\Locking\FlockGenerationLock;
 use Throwable;
 
 /**
@@ -31,6 +34,8 @@ final class WordPressMedia
 
     private readonly DeclaredSizes $declared;
 
+    private readonly ImageProcessor $processor;
+
     /** @var array<int, list<string>> Files of the media being deleted, kept until WordPress has deleted it */
     private array $deleting = [];
 
@@ -40,12 +45,14 @@ final class WordPressMedia
         private readonly ?Action $action = null,
         ?ImageSizes $sizes = null,
         ?ImageProcessor $processor = null,
+        private readonly ThumbnailLimits $limits = new ThumbnailLimits,
     ) {
         $this->legacy = new LegacyUrlRewriter($config);
-        $this->files = new AttachmentFiles;
-        $this->private = new PrivateMedia($storage, $config, $this->files);
         $this->sizes = $sizes ?? ImageSize::registry();
-        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $processor ?? new WordPressImageProcessor);
+        $this->processor = $processor ?? new WordPressImageProcessor;
+        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor);
+        $this->files = new AttachmentFiles(fn (array $metadata): array => $this->declared->existingFiles($metadata));
+        $this->private = new PrivateMedia($storage, $config, $this->files);
     }
 
     public function register(): void
@@ -61,6 +68,7 @@ final class WordPressMedia
         \add_action('deleted_post', [$this, 'deletedPost'], 10, 2);
         $this->private->register();
         $this->declared->register();
+        (new ThumbnailRoute($this->thumbnailService(), $this->config))->register();
 
         if (defined('WP_CLI') && WP_CLI && class_exists(\WP_CLI::class)) {
             \WP_CLI::add_command('pollora media', new MediaCommand(
@@ -136,6 +144,16 @@ final class WordPressMedia
     {
         $files = \apply_filters('pollora/media/attachment_files', [], $attachmentId);
         $this->deleting[$attachmentId] = $this->files->for($attachmentId);
+        $metadata = \wp_get_attachment_metadata($attachmentId);
+
+        // The sizes made on demand are not in the metadata of WordPress: they go with the media.
+        foreach (is_array($metadata) ? $this->declared->existingFiles($metadata) : [] as $file) {
+            try {
+                $this->storage->delete($file);
+            } catch (Throwable) {
+                continue;
+            }
+        }
 
         foreach (is_array($files) ? $files : [] as $path) {
             try {
@@ -159,6 +177,21 @@ final class WordPressMedia
             \do_action('pollora/media/deleted', $postId, $this->deleting[$postId]);
             unset($this->deleting[$postId]);
         }
+    }
+
+    /**
+     * Makes a size when it is first asked for, at the path of its URL.
+     */
+    public function thumbnailService(): ThumbnailService
+    {
+        return new ThumbnailService(
+            $this->storage,
+            $this->sizes,
+            $this->processor,
+            new FlockGenerationLock(sys_get_temp_dir().'/pollora-media-locks'),
+            $this->limits,
+            $this->private->isPrivateFile(...),
+        );
     }
 
     public function declaredSizes(): DeclaredSizes

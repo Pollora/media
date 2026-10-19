@@ -20,7 +20,7 @@ final readonly class SizedFileName
 {
     private const int SIGNATURE_LENGTH = 12;
 
-    private const string PATTERN = '#^(?:(?<directory>.*)/)?(?<stem>.+)-(?<name>[a-z0-9_]+(?:-\d+w)?)-(?<width>\d+)x(?<height>\d+)-(?<signature>[0-9a-f]{12})\.(?<extension>[a-z0-9]+)$#';
+    private const string PATTERN = '#^(?:(?<directory>.*)/)?(?<stem>.+?)-(?<name>[a-z0-9_]+(?:-\d+w)?)-(?<width>\d+)x(?<height>\d+)-(?<signature>[0-9a-f]{12})\.(?<extension>[a-z0-9]+)$#';
 
     /**
      * @param  Closure(): string  $key  The secret the signature is made with: the application key, or a WordPress salt

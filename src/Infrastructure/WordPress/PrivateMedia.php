@@ -110,6 +110,23 @@ final class PrivateMedia
     }
 
     /**
+     * Whether the media a file belongs to is private, for a request that has only the path of the original.
+     * When WordPress cannot say, the file is treated as private: no public size is made of what may not be public.
+     */
+    public function isPrivateFile(string $file): bool
+    {
+        global $wpdb;
+
+        if (! function_exists('get_post_meta') || ! is_object($wpdb)) {
+            return true;
+        }
+
+        $id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_wp_attached_file' AND meta_value = %s LIMIT 1", $file));
+
+        return $id !== null && $this->isPrivate((int) $id);
+    }
+
+    /**
      * A media created private is private on the disk too, from the start.
      *
      * @param  array<string, mixed>  $metadata

@@ -115,7 +115,7 @@ ImageSize::add('thumb')->cover(150, 150)->eager();
 | `cover(w, h)`, `scale(width:, height:)`, `contain(w, h)` | How the image fits: crop to the box, resize keeping the ratio, fit inside the box | none: one is required |
 | `webp(q)`, `avif(q)`, `original()` | The format of the file and its quality | WebP, quality 80 |
 | `widths([...])` | Extra widths for a `srcset`, each a bounded size of its own | none |
-| `eager()` | Made when the image is uploaded | all declared sizes are, until sizes can be made on demand |
+| `eager()` | Made when the image is uploaded | no: made when first asked for |
 | `upscale()` | Allow enlarging an original smaller than the size | off: `scale()` and `contain()` never enlarge, and `cover()` keeps the ratio of the box at the size the original allows |
 
 A size is used by its name, as any WordPress size: `wp_get_attachment_image($id, 'card')`, `the_post_thumbnail('hero')`, `wp_get_attachment_image_src()`.
@@ -123,6 +123,18 @@ A size is used by its name, as any WordPress size: `wp_get_attachment_image($id,
 **The URL of a size is worked out, never read.** It comes from the metadata of the original (its file, width and height), whether the file of the size exists or not: `photo-card-600x400-{signature}.webp`. The signature is an HMAC of the original and of the parameters of the size, cut to 12 characters (the application key in Pollora, a salt of WordPress otherwise): changing a size changes its name, so no cache holds a stale file. The `width`, `height` and `srcset` WordPress writes come from the same computation, with no call to the disk.
 
 The sizes WordPress registers itself (`add_image_size()`, a theme's `config/images.php`, WooCommerce, the core sizes) are left as they are, with the names WordPress gives them, so a theme keeps its output until it declares sizes of its own. A declared size of the same name replaces the WordPress one. A GIF is never resized, which would stop its animation: its sizes are the original.
+
+### Sizes made on demand
+
+A size is made at upload only if it is declared `eager()`. The others are made the first time their URL is asked for: the web server finds no file, sends the request to PHP, and the module makes the size at the exact path of its URL and answers with it. The next request finds the file where the URL said, and the web server or the CDN serves it without PHP. The URL never changes, so there is nothing to regenerate when a size is added or changed.
+
+- **Local disk.** Nginx (`try_files $uri /index.php`) and Apache (the `!-f` rule to `index.php`) already send a missing file to PHP: nothing to set up. For Apache, add the long cache header to the library's `.htaccess` so files already made carry it too.
+- **S3 or compatible service behind a CDN.** The origin of the CDN for the library is the site: one rule at the CDN. PHP sees each file the first time the CDN asks, then the cache lasts a year.
+- **S3 without a CDN.** There is no fallback: declare the sizes you use `eager()` and run `thumbs warm`. The URL stays the same.
+
+What the URL says is not trusted. First, without asking the disk: the name is one of a declared size, the signature is the one the site would have made, the extension is an image's, and the path does not climb out of the library. Then, against the original: its dimensions are those the name gives (nobody can name a size of their own), it is not private, it is not a GIF. A request that fails a check gets a 404 and costs nothing.
+
+Making a size costs CPU, so it is limited, per server: one process per file (ten simultaneous requests for the same missing size make one), at most `POLLORA_MEDIA_THUMBNAILS_CONCURRENCY` sizes at the same time (4), and an original above `POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS` (50 million pixels, imgproxy's default) or `POLLORA_MEDIA_THUMBNAILS_MAX_BYTES` (30 MiB) gets no size at all: it stays downloadable. A request that cannot get a place within `POLLORA_MEDIA_THUMBNAILS_WAIT` seconds (10) is handed a size that already exists, the smallest that is at least as wide, the original at worst, with `Cache-Control: no-store`: the visitor sees an image, the CDN does not keep the stand-in, and the real size is made on a later request. The answer for a size made is `200` with `Cache-Control: public, max-age=31536000, immutable`, never a redirect.
 
 An image uploaded before a size was declared has no file for it yet. Make them with the commands below, before a heavy page goes live:
 
