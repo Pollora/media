@@ -13,6 +13,10 @@ final class CountingStorage implements MediaStorage
 {
     public int $existsCalls = 0;
 
+    public int $readCalls = 0;
+
+    public int $statCalls = 0;
+
     /** @var array<string, mixed> */
     public array $lastWriteOptions = [];
 
@@ -27,6 +31,8 @@ final class CountingStorage implements MediaStorage
 
     public function readStream(string $path)
     {
+        $this->readCalls++;
+
         return $this->inner->readStream($path);
     }
 
@@ -58,11 +64,15 @@ final class CountingStorage implements MediaStorage
 
     public function size(string $path): int
     {
+        $this->statCalls++;
+
         return $this->inner->size($path);
     }
 
     public function lastModified(string $path): int
     {
+        $this->statCalls++;
+
         return $this->inner->lastModified($path);
     }
 

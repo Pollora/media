@@ -22,6 +22,16 @@ final class StreamWrapper
 {
     public const string SCHEME = 'pollora';
 
+    /**
+     * The base WordPress is given as the uploads directory. It is not `pollora://` alone: WordPress
+     * trims the trailing slashes of a base (`untrailingslashit()`), which would leave `pollora:` and
+     * a path on the local disk.
+     */
+    public const string ROOT = 'pollora://uploads';
+
+    /** Bytes: a file up to this size is kept in a local copy for the rest of the request. */
+    public const int DEFAULT_LOCAL_COPY_LIMIT = 16 * 1024 * 1024;
+
     /** @var resource|null Set by PHP */
     public $context;
 
@@ -31,6 +41,13 @@ final class StreamWrapper
 
     /** @var array<string, array{size: int, mtime: int}|false> What the disk said about a file, for this request */
     private static array $stats = [];
+
+    /** @var array<string, string> Local copies of the files written or read in this request, by key */
+    private static array $copies = [];
+
+    private static int $copyLimit = self::DEFAULT_LOCAL_COPY_LIMIT;
+
+    private static bool $shutdownRegistered = false;
 
     /** @var resource|null */
     private $buffer;
@@ -48,9 +65,15 @@ final class StreamWrapper
 
     public static function register(MediaStorage $storage, MediaConfig $config): void
     {
+        self::forgetCopies();
         self::$storage = $storage;
         self::$config = $config;
         self::$stats = [];
+
+        if (! self::$shutdownRegistered) {
+            register_shutdown_function(self::forgetCopies(...));
+            self::$shutdownRegistered = true;
+        }
 
         if (! in_array(self::SCHEME, stream_get_wrappers(), true)) {
             stream_wrapper_register(self::SCHEME, self::class);
@@ -66,6 +89,27 @@ final class StreamWrapper
         self::$storage = null;
         self::$config = null;
         self::$stats = [];
+        self::forgetCopies();
+    }
+
+    /**
+     * The biggest file kept in a local copy. A file written or read in a request is read again in
+     * the same request by WordPress (image size, EXIF, editor): the copy saves the trips to the disk.
+     */
+    public static function limitLocalCopies(int $bytes): void
+    {
+        self::$copyLimit = $bytes;
+    }
+
+    public static function forgetCopies(): void
+    {
+        foreach (self::$copies as $path) {
+            if (is_file($path)) {
+                unlink($path);
+            }
+        }
+
+        self::$copies = [];
     }
 
     /**
@@ -74,6 +118,10 @@ final class StreamWrapper
     public static function keyOf(string $url): ?string
     {
         $key = trim(substr($url, strlen(self::SCHEME.'://')), '/');
+
+        if ($key === 'uploads' || str_starts_with($key, 'uploads/')) {
+            $key = ltrim(substr($key, strlen('uploads')), '/');
+        }
 
         foreach (explode('/', $key) as $segment) {
             if ($segment === '..') {
@@ -98,7 +146,8 @@ final class StreamWrapper
         $this->writable = $kind !== 'r' || str_contains($mode, '+');
 
         try {
-            $exists = self::$storage->exists($key);
+            $copy = self::$copies[$key] ?? null;
+            $exists = $kind !== 'w' && $this->known($key, $copy);
 
             if ($kind === 'x' && $exists) {
                 return $this->fail();
@@ -109,14 +158,13 @@ final class StreamWrapper
             }
 
             if (($kind === 'r' || $kind === 'a' || $kind === 'c') && $exists) {
-                stream_copy_to_stream(self::$storage->readStream($key), $this->buffer);
-                rewind($this->buffer);
+                $this->load($key, $copy);
             }
 
             if ($kind === 'a') {
                 fseek($this->buffer, 0, SEEK_END);
             }
-        } catch (Throwable $throwable) {
+        } catch (Throwable) {
             return $this->fail();
         }
 
@@ -190,7 +238,10 @@ final class StreamWrapper
         if ($this->writable && $this->dirty && self::$storage !== null && is_resource($this->buffer)) {
             rewind($this->buffer);
             self::$storage->write($this->key, $this->buffer, ['CacheControl' => self::$config?->cacheControl]);
-            unset(self::$stats[$this->key]);
+
+            $size = (int) (fstat($this->buffer)['size'] ?? 0);
+            self::$stats[$this->key] = ['size' => $size, 'mtime' => time()];
+            $this->keepCopy($this->key, $size);
         }
 
         if (is_resource($this->buffer)) {
@@ -244,13 +295,14 @@ final class StreamWrapper
             return false;
         }
 
-        try {
-            if (! self::$storage->exists($key)) {
-                return false;
-            }
+        // A file this request found missing is not asked about again; deleting is idempotent on a disk.
+        if ((self::$stats[$key] ?? null) === false) {
+            return false;
+        }
 
+        try {
             self::$storage->delete($key);
-            unset(self::$stats[$key]);
+            self::forget($key);
 
             return true;
         } catch (Throwable) {
@@ -269,7 +321,8 @@ final class StreamWrapper
 
         try {
             self::$storage->move($source, $destination);
-            unset(self::$stats[$source], self::$stats[$destination]);
+            self::forget($source);
+            self::forget($destination);
 
             return true;
         } catch (Throwable) {
@@ -293,6 +346,7 @@ final class StreamWrapper
         try {
             self::$storage->deleteDirectory($key);
             self::$stats = [];
+            self::forgetCopies();
 
             return true;
         } catch (Throwable) {
@@ -339,6 +393,76 @@ final class StreamWrapper
         $this->entries = [];
 
         return true;
+    }
+
+    /**
+     * Whether the file is there: what this request already knows, else the disk.
+     */
+    private function known(string $key, ?string $copy): bool
+    {
+        if ($copy !== null || is_array(self::$stats[$key] ?? false)) {
+            return true;
+        }
+
+        return self::$storage->exists($key);
+    }
+
+    /**
+     * Fills the buffer from the local copy when there is one, else from the disk, and remembers a file that is not too big.
+     */
+    private function load(string $key, ?string $copy): void
+    {
+        $source = $copy !== null ? fopen($copy, 'rb') : self::$storage->readStream($key);
+        stream_copy_to_stream($source, $this->buffer);
+        fclose($source);
+
+        $size = (int) ftell($this->buffer);
+        rewind($this->buffer);
+
+        if ($copy === null) {
+            self::$stats[$key] ??= ['size' => $size, 'mtime' => time()];
+            $this->keepCopy($key, $size);
+        }
+    }
+
+    /**
+     * Keeps what the buffer holds in a temporary file, unless it is bigger than the limit.
+     */
+    private function keepCopy(string $key, int $size): void
+    {
+        $previous = self::$copies[$key] ?? null;
+        unset(self::$copies[$key]);
+
+        if ($previous !== null && is_file($previous)) {
+            unlink($previous);
+        }
+
+        if ($size > self::$copyLimit) {
+            return;
+        }
+
+        $path = sys_get_temp_dir().'/pollora-media-copy-'.bin2hex(random_bytes(8));
+        $handle = fopen($path, 'wb');
+        $position = (int) ftell($this->buffer);
+        rewind($this->buffer);
+        stream_copy_to_stream($this->buffer, $handle);
+        fseek($this->buffer, $position);
+        fclose($handle);
+
+        self::$copies[$key] = $path;
+    }
+
+    private static function forget(string $key): void
+    {
+        unset(self::$stats[$key]);
+
+        if (isset(self::$copies[$key])) {
+            if (is_file(self::$copies[$key])) {
+                unlink(self::$copies[$key]);
+            }
+
+            unset(self::$copies[$key]);
+        }
     }
 
     /**

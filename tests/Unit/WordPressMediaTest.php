@@ -19,13 +19,14 @@ afterEach(function (): void {
     StreamWrapper::unregister();
 });
 
-it('hooks WordPress at the points of the specification, and nowhere else', function (): void {
+it('hooks WordPress at the points of the specification', function (): void {
     Filters\expectAdded('upload_dir')->once();
     Filters\expectAdded('pre_wp_unique_filename_file_list')->once();
     Filters\expectAdded('wp_resource_hints')->once();
     Filters\expectAdded('the_content')->once();
     Filters\expectAdded('render_block')->once();
-    Functions\expect('add_action')->with('delete_attachment', Mockery::type('array'), 10, 1)->once();
+    Brain\Monkey\Actions\expectAdded('delete_attachment')->once();
+    Filters\expectAdded('wp_privacy_exports_dir')->once();
 
     $this->media->register();
 
@@ -52,10 +53,10 @@ it('points the upload directory at the wrapper and the public URL, keeping the d
     ]);
 
     expect($dirs)->toBe([
-        'path' => 'pollora://2026/10',
+        'path' => 'pollora://uploads/2026/10',
         'url' => 'https://media.client.fr/2026/10',
         'subdir' => '/2026/10',
-        'basedir' => 'pollora://',
+        'basedir' => 'pollora://uploads',
         'baseurl' => 'https://media.client.fr',
         'error' => false,
     ]);
@@ -79,11 +80,11 @@ it('keeps the folder WordPress adds for a site of a network, and an upload direc
         'error' => false,
     ]);
 
-    expect($site['basedir'])->toBe('pollora://sites/3')
-        ->and($site['path'])->toBe('pollora://sites/3/2026/10')
+    expect($site['basedir'])->toBe('pollora://uploads/sites/3')
+        ->and($site['path'])->toBe('pollora://uploads/sites/3/2026/10')
         ->and($site['baseurl'])->toBe('https://media.client.fr/sites/3')
         ->and($site['url'])->toBe('https://media.client.fr/sites/3/2026/10')
-        ->and($flat['path'])->toBe('pollora://')
+        ->and($flat['path'])->toBe('pollora://uploads')
         ->and($flat['url'])->toBe('https://media.client.fr');
 });
 

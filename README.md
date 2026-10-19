@@ -82,7 +82,12 @@ add_filter('pollora/media/filesystem', fn () => new Filesystem(new SftpAdapter(/
 | `wp_resource_hints` | `dns-prefetch` to the media domain when it differs from the site's |
 | `the_content`, `render_block` | Legacy URLs are replaced by the public URL, with a plain string replacement. Hooked only when `legacy_urls` is set |
 
-The `pollora://` wrapper sends a file to the disk when its stream is closed, in one write. Directories do not exist on an object store, so they are virtual and answer without asking the disk (a path with an extension is a file); what is asked about a file is remembered for the rest of the request.
+| `intermediate_image_sizes_advanced`, `wp_generate_attachment_metadata` | With `POLLORA_MEDIA_ASYNC_THUMBNAILS` (or `async_thumbnails`): only `thumbnail` and `medium` are made during the upload; the other sizes are generated afterwards by an asynchronous action (Action Scheduler, WP-Cron, or the queue a framework provides). WordPress serves the nearest size it has in the meantime |
+| `wp_privacy_exports_dir`, `wp_privacy_exports_url`, `wp_privacy_personal_data_export_file_created`, `wp_privacy_delete_old_export_files` | The personal data export builds its archive locally (`ZipArchive` cannot write to a wrapper), copies it to the disk, links it through the public URL, and the old archives are deleted from the disk |
+
+The `pollora://` wrapper sends a file to the disk when its stream is closed, in one write. Directories do not exist on an object store, so they are virtual and answer without asking the disk (a path with an extension is a file); what is asked about a file is remembered for the rest of the request. A file written or read during a request, up to 16 MiB, is also kept in a local copy until the request ends: WordPress reads an uploaded image again for its size, its EXIF data, its sizes and its metadata, and none of it goes back to the disk. One upload of an image with nine sizes costs ten writes and a handful of existence checks; a read of the original, a stat or a listing never happens. Both the GD and the Imagick editors of WordPress work on the wrapper as they are.
+
+The wrapper's root is `pollora://uploads`: WordPress trims the trailing slashes of the base it is given, which would turn `pollora://` into a path on the local disk. A path with or without that first segment reaches the same file.
 
 ### Limits
 

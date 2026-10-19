@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure\WordPress;
 
+use Pollora\Hook\Domain\Contract\Action;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\LegacyUrlRewriter;
@@ -21,6 +22,7 @@ final class WordPressMedia
     public function __construct(
         private readonly MediaStorage $storage,
         private readonly MediaConfig $config,
+        private readonly ?Action $action = null,
     ) {
         $this->legacy = new LegacyUrlRewriter($config);
     }
@@ -41,6 +43,12 @@ final class WordPressMedia
                 rtrim((string) $this->constant('WP_CONTENT_DIR'), '/').'/uploads',
                 rtrim((string) $this->constant('WP_CONTENT_URL'), '/').'/uploads',
             ));
+        }
+
+        (new PrivacyExports($this->storage, $this->config))->register();
+
+        if ($this->config->asyncThumbnails) {
+            (new AsyncThumbnails($this->action))->register();
         }
 
         if ($this->legacy->isActive()) {
@@ -65,9 +73,9 @@ final class WordPressMedia
         $site = preg_match('#/sites/\d+$#', (string) $dirs['basedir'], $match) === 1 ? $match[0] : '';
         $subdir = (string) $dirs['subdir'];
 
-        $dirs['basedir'] = StreamWrapper::SCHEME.'://'.ltrim($site, '/');
+        $dirs['basedir'] = StreamWrapper::ROOT.$site;
         $dirs['baseurl'] = $this->config->url.$site;
-        $dirs['path'] = StreamWrapper::SCHEME.'://'.ltrim($site.$subdir, '/');
+        $dirs['path'] = StreamWrapper::ROOT.$site.$subdir;
         $dirs['url'] = $this->config->url.$site.$subdir;
 
         return $dirs;

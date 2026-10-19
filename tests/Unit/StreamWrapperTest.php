@@ -197,3 +197,91 @@ it('is registered once under the pollora scheme, and unregisters', function (): 
 
     expect(in_array('pollora', stream_get_wrappers(), true))->toBeTrue();
 });
+
+it('does not read a file back from the disk in the request that wrote it, nor ask its size', function (): void {
+    $counting = new CountingStorage($this->disk->storage);
+    StreamWrapper::register($counting, new MediaConfig('https://media.test'));
+
+    file_put_contents('pollora://2026/10/photo.jpg', 'original bytes');
+
+    expect(file_get_contents('pollora://2026/10/photo.jpg'))->toBe('original bytes')
+        ->and(file_get_contents('pollora://2026/10/photo.jpg'))->toBe('original bytes')
+        ->and(filesize('pollora://2026/10/photo.jpg'))->toBe(14)
+        ->and(file_exists('pollora://2026/10/photo.jpg'))->toBeTrue()
+        ->and($counting->readCalls)->toBe(0)
+        ->and($counting->statCalls)->toBe(0)
+        ->and($counting->existsCalls)->toBe(0);
+});
+
+it('reads a file the disk already had once, however many times the request reads it', function (): void {
+    $this->disk->storage->write('2026/10/old.jpg', 'old bytes');
+    $counting = new CountingStorage($this->disk->storage);
+    StreamWrapper::register($counting, new MediaConfig('https://media.test'));
+
+    foreach (range(1, 3) as $ignored) {
+        expect(file_get_contents('pollora://2026/10/old.jpg'))->toBe('old bytes');
+    }
+
+    expect($counting->readCalls)->toBe(1);
+});
+
+it('serves the new bytes after a file is rewritten, deleted or renamed', function (): void {
+    file_put_contents('pollora://a.jpg', 'one');
+    file_get_contents('pollora://a.jpg');
+    file_put_contents('pollora://a.jpg', 'two');
+
+    expect(file_get_contents('pollora://a.jpg'))->toBe('two');
+
+    rename('pollora://a.jpg', 'pollora://b.jpg');
+    expect(file_get_contents('pollora://b.jpg'))->toBe('two')
+        ->and(file_exists('pollora://a.jpg'))->toBeFalse();
+
+    unlink('pollora://b.jpg');
+    expect(file_exists('pollora://b.jpg'))->toBeFalse();
+});
+
+it('does not keep a file bigger than the limit on the local disk, and still reads it', function (): void {
+    $counting = new CountingStorage($this->disk->storage);
+    StreamWrapper::register($counting, new MediaConfig('https://media.test'));
+    StreamWrapper::limitLocalCopies(10);
+
+    file_put_contents('pollora://big.bin', str_repeat('x', 100));
+
+    expect(file_get_contents('pollora://big.bin'))->toBe(str_repeat('x', 100))
+        ->and($counting->readCalls)->toBe(1);
+
+    StreamWrapper::limitLocalCopies(StreamWrapper::DEFAULT_LOCAL_COPY_LIMIT);
+});
+
+it('removes its local copies when it unregisters', function (): void {
+    file_put_contents('pollora://tmp-check.jpg', 'x');
+    $before = glob(sys_get_temp_dir().'/pollora-media-copy-*');
+
+    StreamWrapper::unregister();
+
+    expect($before)->not->toBe([])
+        ->and(glob(sys_get_temp_dir().'/pollora-media-copy-*'))->toBe([]);
+});
+
+it('deletes without asking the disk first, and says false for a file it found missing', function (): void {
+    $this->disk->storage->write('gone.jpg', 'x');
+    $counting = new CountingStorage($this->disk->storage);
+    StreamWrapper::register($counting, new MediaConfig('https://media.test'));
+
+    expect(unlink('pollora://gone.jpg'))->toBeTrue()
+        ->and($counting->existsCalls)->toBe(0)
+        ->and(file_exists('pollora://gone.jpg'))->toBeFalse()
+        ->and(@unlink('pollora://gone.jpg'))->toBeFalse();
+});
+
+it('takes pollora://uploads as the root of the library, so WordPress can trim the slashes of its base', function (): void {
+    file_put_contents('pollora://uploads/2026/10/a.jpg', 'x');
+
+    expect(file_get_contents($this->disk->root.'/2026/10/a.jpg'))->toBe('x')
+        ->and(file_exists('pollora://uploads/2026/10/a.jpg'))->toBeTrue()
+        ->and(file_exists('pollora://2026/10/a.jpg'))->toBeTrue()
+        ->and(StreamWrapper::keyOf('pollora://uploads'))->toBe('')
+        ->and(StreamWrapper::keyOf('pollora://uploads/sites/3/b.jpg'))->toBe('sites/3/b.jpg')
+        ->and(StreamWrapper::keyOf('pollora://uploadsX/b.jpg'))->toBe('uploadsX/b.jpg')
+        ->and(is_dir('pollora://uploads'))->toBeTrue();
+});

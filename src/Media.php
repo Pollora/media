@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pollora\Media;
 
 use League\Flysystem\FilesystemOperator;
+use Pollora\Hook\Adapter\Out\WordPress\Action;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Infrastructure\Flysystem\FlysystemMediaStorage;
 use Pollora\Media\Infrastructure\WordPress\ConstantsConfiguration;
@@ -37,6 +38,7 @@ final class Media
         $media = new WordPressMedia(
             new FlysystemMediaStorage($filesystem ?? $constants->filesystem()),
             $config ?? $constants->config(),
+            new Action,
         );
         $media->register();
 
