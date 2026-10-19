@@ -27,6 +27,9 @@ final class PrivateMedia
     /** @var array<int, bool> */
     private array $known = [];
 
+    /** Set while WordPress works out the URL of a size: it builds it from the URL of the media. */
+    private bool $downsizing = false;
+
     public function __construct(
         private readonly MediaStorage $storage,
         private readonly MediaConfig $config,
@@ -35,6 +38,7 @@ final class PrivateMedia
 
     public function register(): void
     {
+        \add_filter('image_downsize', [$this, 'startDownsize'], 0, 1);
         \add_filter('wp_get_attachment_url', [$this, 'url'], 10, 2);
         \add_filter('wp_get_attachment_image_src', [$this, 'imageSrc'], 10, 2);
         \add_filter('wp_calculate_image_srcset', [$this, 'srcset'], 10, 5);
@@ -50,9 +54,24 @@ final class PrivateMedia
         );
     }
 
+    /**
+     * WordPress builds the URL of a size by replacing the file name in the URL of the media: that
+     * one must still be the plain URL, and the size is signed when `wp_get_attachment_image_src` has it.
+     */
+    public function startDownsize(mixed $short): mixed
+    {
+        $this->downsizing = true;
+
+        return $short;
+    }
+
     public function url(string|false $url, int $attachmentId): string|false
     {
-        return is_string($url) && $this->isPrivate($attachmentId) ? $this->sign($url, $attachmentId) : $url;
+        if ($this->downsizing || ! is_string($url)) {
+            return $url;
+        }
+
+        return $this->isPrivate($attachmentId) ? $this->sign($url, $attachmentId) : $url;
     }
 
     /**
@@ -61,6 +80,8 @@ final class PrivateMedia
      */
     public function imageSrc(array|false $image, int $attachmentId): array|false
     {
+        $this->downsizing = false;
+
         if (! is_array($image) || ! $this->isPrivate($attachmentId)) {
             return $image;
         }

@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Private media: a media flagged private (`_pollora_media_private`, or the `pollora/media/is_private` filter) is served through a signed URL that expires (`private expiry`, `+6 hours` by default) on its URL, the URL of its sizes and every source of its `srcset`; a public media keeps its plain URL, and nothing is asked of the disk to tell them apart. `PrivateMedia::setPrivate()` changes the visibility of every file of a media on the disk, and a media created private is private from the start
 - The `MediaStorage` port gives `visibility()`, `setVisibility()` and `temporaryUrl()` (null when the disk cannot sign); `FlysystemMediaStorage` takes the signing function of the host, as a Laravel disk has its own
+- While WordPress builds the URL of an image size from the URL of its media, that one stays plain, and the size is signed when `wp_get_attachment_image_src` has it
 - `AttachmentFiles`: every file of a media, with those a plugin declares (`pollora/media/attachment_files`)
 - Hooks to extend and audit: the `pollora/media/signed_url` filter and the `pollora/media/stored`, `pollora/media/deleted` and `pollora/media/visibility_changed` actions
 - `wp pollora media files <id>` and `wp pollora media visibility <id> --private|--public`

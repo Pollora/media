@@ -106,7 +106,7 @@ The module gives no screen to mark a media private. Three ways to do it:
 
 ```php
 // 1. From code: every file of the media changes on the disk, then the media itself
-(new \Pollora\Media\Infrastructure\WordPress\PrivateMedia(...))->setPrivate($attachmentId, true);
+\Pollora\Media\Media::register()->privateMedia()->setPrivate($attachmentId, true);  // without Laravel; in Pollora, resolve WordPressMedia from the container
 
 // 2. By rule, for every media: a media created private is private on the disk from the start
 add_filter('pollora/media/is_private', fn (bool $private, int $id) => get_post_meta($id, 'invoice', true) !== '', 10, 2);

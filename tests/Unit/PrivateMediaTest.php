@@ -37,6 +37,7 @@ beforeEach(function (): void {
 });
 
 it('hooks the URL of a media, of an image size, and the srcset, and the creation of a media', function (): void {
+    Filters\expectAdded('image_downsize')->once();
     Filters\expectAdded('wp_get_attachment_url')->once();
     Filters\expectAdded('wp_get_attachment_image_src')->once();
     Filters\expectAdded('wp_calculate_image_srcset')->once();
@@ -164,4 +165,17 @@ it('does not mark anything private on an update of the metadata', function (): v
     Actions\expectDone('pollora/media/visibility_changed')->never();
 
     $this->private->generated(['file' => 'x.jpg'], 7, 'update');
+});
+
+it('leaves the URL of the media plain while WordPress builds the URL of a size from it, then signs the size', function (): void {
+    $this->meta[7][PrivateMedia::META] = '1';
+
+    $this->private->startDownsize(false);
+    $plain = $this->private->url('https://media.client.fr/2026/10/photo.jpg', 7);
+    $size = $this->private->imageSrc(['https://media.client.fr/2026/10/photo-150x150.jpg', 150, 150, true], 7);
+    $after = $this->private->url('https://media.client.fr/2026/10/photo.jpg', 7);
+
+    expect($plain)->toBe('https://media.client.fr/2026/10/photo.jpg')
+        ->and($size[0])->toStartWith('https://bucket.s3.test/2026/10/photo-150x150.jpg?')
+        ->and($after)->toStartWith('https://bucket.s3.test/2026/10/photo.jpg?');
 });
