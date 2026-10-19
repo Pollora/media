@@ -127,3 +127,17 @@ it('exports nothing for the default driver, and refuses an unknown one', functio
 it('knows the configured driver, which the command takes by default', function (): void {
     expect(($this->exporter)()->configuredDriver())->toBe('bunny');
 });
+
+it('warns that imgproxy refuses a loopback source by default, for a media URL on this machine', function (string $url, bool $warns): void {
+    $exporter = new ThumbnailExporter($this->sizes, $this->settings, new ThumbnailLimits, new MediaConfig($url), $this->pullZone);
+
+    $warnings = implode(' ', $exporter->export('imgproxy', execute: false)->warnings);
+
+    expect(str_contains($warnings, 'IMGPROXY_ALLOW_LOOPBACK_SOURCE_ADDRESSES'))->toBe($warns);
+})->with([
+    'localhost' => ['http://localhost:8080/uploads', true],
+    'loopback ip' => ['http://127.0.0.1:18081', true],
+    'ipv6 loopback' => ['http://[::1]/uploads', true],
+    'a real domain' => ['https://media.client.fr', false],
+    'a name that only starts like one' => ['https://localhost.client.fr', false],
+]);

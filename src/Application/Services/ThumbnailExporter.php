@@ -124,7 +124,18 @@ final readonly class ThumbnailExporter
             $lines[] = 'IMGPROXY_SIGNATURE_SIZE='.$this->settings->imgproxySignatureSize;
         }
 
+        if (! $s3 && $this->isLoopback($this->config->url)) {
+            $warnings[] = 'media.url points at the loopback address of this machine, which imgproxy refuses as a source by default: for local development only, start imgproxy with IMGPROXY_ALLOW_LOOPBACK_SOURCE_ADDRESSES=true.';
+        }
+
         return new ExportReport(ThumbnailDriverSettings::IMGPROXY, $lines, $warnings);
+    }
+
+    private function isLoopback(string $url): bool
+    {
+        $host = strtolower(trim((string) parse_url($url, PHP_URL_HOST), '[]'));
+
+        return $host === 'localhost' || $host === '::1' || preg_match('/^127\.\d+\.\d+\.\d+$/', $host) === 1;
     }
 
     /**
