@@ -13,11 +13,13 @@ final readonly class MigrationReport
      * @param  list<string>  $copied
      * @param  list<string>  $skipped  Already on the target with the same size
      * @param  list<string>  $failed
+     * @param  list<string>  $excluded  Left out on purpose, by an exclusion pattern
      */
     public function __construct(
         public array $copied,
         public array $skipped,
         public array $failed,
         public bool $dryRun,
+        public array $excluded = [],
     ) {}
 }

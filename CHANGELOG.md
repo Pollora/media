@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `--exclude=<patterns>` on `wp pollora media migrate` (comma-separated), and `MediaMigrator::migrate(exclude: [...])`: paths matching a pattern (`woocommerce_uploads/*`, `*.zip`; `*` matches across folders) are not copied. `MigrationReport::$excluded` lists them, and the progress callback receives `exclude`. Meant for folders of private files (protected downloads, logs, form attachments, backups) that a public disk would serve to anyone
+
+### Fixed
+
+- `migrate` sent no `Cache-Control` with the files it copied, whereas an upload does: a migrated file was served without the long cache header. `MediaMigrator` takes the header as its third constructor argument, and `wp pollora media migrate` passes `cache_control`
+- `migrate` ignored the visibility of the source: a private file copied to a disk with a public default became public. The visibility of each file is now sent with the write, in the same request (no second call per file)
+
 ## [0.6.1] - 2026-10-19
 
 ### Fixed

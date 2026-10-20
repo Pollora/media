@@ -218,12 +218,13 @@ A disk that cannot sign a URL (a plain local disk) serves the plain URL of a pri
 wp pollora media status                       # the public URL, and a test write
 wp pollora media migrate                      # dry run: what would be copied from the uploads folder
 wp pollora media migrate --execute            # copy the files; the source is never changed
+wp pollora media migrate --execute --exclude='woocommerce_uploads/*,wc-logs/*'   # leave folders out
 wp pollora media migrate --execute --replace-urls --old-url=https://site.test/content/uploads
 wp pollora media files <id>                   # the files of a media: original, sizes, declared files
 wp pollora media visibility <id> --private    # or --public
 ```
 
-`migrate` skips a file already on the target with the same size, so it can be repeated. `--replace-urls` replaces the old base URL in post content and excerpts and in post, term and user meta and options, serialized values and the JSON of blocks included; the `guid` is left alone. Without `--execute`, nothing is written.
+`migrate` skips a file already on the target with the same size, so it can be repeated. Each file keeps the visibility it has on the source, and carries the `cache_control` header of the configuration. `--exclude` takes comma-separated patterns (`*` matches across folders, so `woocommerce_uploads/*` leaves out the whole folder): use it for folders of private files, such as protected WooCommerce downloads, logs or form attachments, which a public disk would serve to anyone. The Artisan command takes the option once per pattern: `--exclude='woocommerce_uploads/*' --exclude='wc-logs/*'`. `--replace-urls` replaces the old base URL in post content and excerpts and in post, term and user meta and options, serialized values and the JSON of blocks included; the `guid` is left alone. Without `--execute`, nothing is written.
 
 ## Testing
 
