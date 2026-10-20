@@ -51,6 +51,7 @@ final class DeclaredSizes
     {
         \add_filter('intermediate_image_sizes_advanced', [$this, 'withoutDeclared'], 100, 1);
         \add_filter('wp_generate_attachment_metadata', [$this, 'generate'], 20, 3);
+        \add_filter('wp_update_attachment_metadata', [$this, 'remake'], 20, 2);
         \add_filter('image_downsize', [$this, 'downsize'], 10, 3);
         \add_filter('wp_calculate_image_srcset', [$this, 'srcset'], 5, 5);
     }
@@ -77,19 +78,31 @@ final class DeclaredSizes
             return $metadata;
         }
 
-        foreach ($this->known() as $spec) {
-            if (! $spec->eager || ! $this->driver->makesFiles()) {
-                continue;
-            }
+        return $this->withEagerSizes($metadata);
+    }
 
-            $entry = $this->make($metadata, $spec);
-
-            if ($entry !== null) {
-                $metadata['sizes'][$spec->name] = $entry;
-            }
+    /**
+     * Makes the eager sizes of an image whose original was replaced: cropped, rotated or flipped in the media
+     * library, or put back by *Restore image*. WordPress writes the new original and its own sizes, then saves
+     * the metadata without going through `wp_generate_attachment_metadata`, so `generate()` never sees it.
+     * The files of the previous original stay: WordPress keeps it as the backup that *Restore image* goes back to.
+     *
+     * @param  mixed  $metadata  What is about to be saved
+     */
+    public function remake(mixed $metadata, int $attachmentId): mixed
+    {
+        if (! is_array($metadata) || $this->sizes->isEmpty() || ! $this->isImage($metadata)) {
+            return $metadata;
         }
 
-        return $metadata;
+        $stored = \wp_get_attachment_metadata($attachmentId);
+        $previous = is_array($stored) ? (string) ($stored['file'] ?? '') : '';
+
+        if ($previous === '' || $previous === (string) $metadata['file']) {
+            return $metadata;
+        }
+
+        return $this->withEagerSizes($metadata);
     }
 
     /**
@@ -246,6 +259,27 @@ final class DeclaredSizes
     public function isMakeable(array $metadata): bool
     {
         return $this->isImage($metadata) && ! $this->isGif($metadata);
+    }
+
+    /**
+     * @param  array<string, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function withEagerSizes(array $metadata): array
+    {
+        foreach ($this->known() as $spec) {
+            if (! $spec->eager || ! $this->driver->makesFiles()) {
+                continue;
+            }
+
+            $entry = $this->make($metadata, $spec);
+
+            if ($entry !== null) {
+                $metadata['sizes'][$spec->name] = $entry;
+            }
+        }
+
+        return $metadata;
     }
 
     /**

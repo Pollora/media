@@ -129,7 +129,7 @@ The sizes WordPress registers itself (`add_image_size()`, a theme's `config/imag
 
 ### Sizes made on demand
 
-A size is made at upload only if it is declared `eager()`. The others are made the first time their URL is asked for: the web server finds no file, sends the request to PHP, and the module makes the size at the exact path of its URL and answers with it. The next request finds the file where the URL said, and the web server or the CDN serves it without PHP. The URL never changes, so there is nothing to regenerate when a size is added or changed.
+A size is made at upload only if it is declared `eager()`. The same goes for an image cropped, rotated or flipped in the media library: its new original gets its `eager()` sizes, and the files of the previous original stay for *Restore image*. The editor's *Apply changes to: thumbnail only* option is not followed by a declared size, which is always made from the original. The others are made the first time their URL is asked for: the web server finds no file, sends the request to PHP, and the module makes the size at the exact path of its URL and answers with it. The next request finds the file where the URL said, and the web server or the CDN serves it without PHP. The URL never changes, so there is nothing to regenerate when a size is added or changed.
 
 - **Local disk.** Nginx (`try_files $uri /index.php`) and Apache (the `!-f` rule to `index.php`) already send a missing file to PHP: nothing to set up. For Apache, add the long cache header to the library's `.htaccess` so files already made carry it too.
 - **S3 or compatible service behind a CDN.** The origin of the CDN for the library is the site: one rule at the CDN. PHP sees each file the first time the CDN asks, then the cache lasts a year.
