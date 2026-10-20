@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-20
+
 ### Added
 
 - An anchor for `cover()`: `ImageSize::add('portrait')->cover(400, 500, Anchor::Top)`. `Anchor` has the nine positions of `add_image_size()` (`Center`, `Top`, `Bottom`, `Left`, `Right`, `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`). The region a cover keeps is placed by the anchor instead of centred (`SizeGeometry::coverRegion(..., $anchor)`), the dimensions do not change, and a non-centred anchor is part of `ImageSizeSpec::fingerprint()`, so it changes the name of the files and the `v` of a service URL. The fingerprint of a centred size is what it was, so no existing file or URL changes. `ImageSizeSpec` refuses an anchor on a fit that is not a cover. imgproxy: the preset gets a `gravity` (`no`, `so`, `we`, `ea`, `nowe`, `noea`, `sowe`, `soea`), checked on imgproxy 4 (a left, right, top and bottom anchor keep the part of the image they name). Bunny: a cover anchored away from the centre is refused (`BunnyClasses::refusal()`), reported by `thumbs export` and `pollora:doctor`, since no parameter of a class is known to move its crop
