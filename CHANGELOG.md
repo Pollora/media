@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-20
+
 ### Added
 
 - `--exclude=<patterns>` on `wp pollora media migrate` (comma-separated), and `MediaMigrator::migrate(exclude: [...])`: paths matching a pattern (`woocommerce_uploads/*`, `*.zip`; `*` matches across folders) are not copied. `MigrationReport::$excluded` lists them, and the progress callback receives `exclude`. Meant for folders of private files (protected downloads, logs, form attachments, backups) that a public disk would serve to anyone
