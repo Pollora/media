@@ -67,7 +67,7 @@ final readonly class ThumbnailExporter
         $sizeNames = array_keys($this->sizes->withVariants());
 
         foreach ($this->sizes->withVariants() as $sizeName => $spec) {
-            $refusal = $mapping->refusal($sizeName, $sizeNames);
+            $refusal = $mapping->refusal($sizeName, $sizeNames, $spec);
 
             if ($refusal !== null) {
                 $warnings[] = $refusal;

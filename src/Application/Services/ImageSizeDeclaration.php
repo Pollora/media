@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pollora\Media\Application\Services;
 
 use InvalidArgumentException;
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
@@ -29,17 +30,22 @@ final class ImageSizeDeclaration
 
     private bool $eager = false;
 
+    private Anchor $anchor = Anchor::Center;
+
     /** @var list<int> */
     private array $widths = [];
 
     public function __construct(private readonly string $name) {}
 
     /**
-     * Crops to exactly the box, centered.
+     * Crops to exactly the box, around the center unless the anchor says otherwise.
      */
-    public function cover(int $width, ?int $height = null): static
+    public function cover(int $width, ?int $height = null, Anchor $anchor = Anchor::Center): static
     {
-        return $this->fit(Fit::Cover, $width, $height);
+        $this->fit(Fit::Cover, $width, $height);
+        $this->anchor = $anchor;
+
+        return $this;
     }
 
     /**
@@ -126,12 +132,13 @@ final class ImageSizeDeclaration
             throw new InvalidArgumentException(sprintf('The size "%s" has no fit: call cover(), scale() or contain().', $this->name));
         }
 
-        return new ImageSizeSpec($this->name, $this->fit, $this->width, $this->height, $this->format, $this->quality, $this->upscale, $this->eager, $this->widths);
+        return new ImageSizeSpec($this->name, $this->fit, $this->width, $this->height, $this->format, $this->quality, $this->upscale, $this->eager, $this->widths, $this->anchor);
     }
 
     private function fit(Fit $fit, ?int $width, ?int $height): static
     {
         $this->fit = $fit;
+        $this->anchor = Anchor::Center;
         $this->width = $width;
         $this->height = $height;
 

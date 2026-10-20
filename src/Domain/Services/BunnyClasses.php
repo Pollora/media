@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Domain\Services;
 
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
@@ -33,10 +34,18 @@ final class BunnyClasses
      * Why a size cannot have a class of its own, or null when it can: its class name is empty, or an
      * earlier size already has it (the first declared keeps it).
      *
+     * A cover anchored away from the center is refused too: the way Bunny crops to a ratio is not documented,
+     * and no parameter of the class is known to move it, so it would be served centered under a URL that
+     * promises another crop.
+     *
      * @param  list<string>  $sizeNames  Every size to serve, in declaration order
      */
-    public function refusal(string $sizeName, array $sizeNames): ?string
+    public function refusal(string $sizeName, array $sizeNames, ?ImageSizeSpec $spec = null): ?string
     {
+        if ($spec instanceof ImageSizeSpec && $spec->anchor !== Anchor::Center) {
+            return sprintf('The size "%s" is anchored to the %s: Bunny crops a cover around the center only. Use the pollora or imgproxy driver, or the center.', $sizeName, $spec->anchor->value);
+        }
+
         $class = $this->className($sizeName);
 
         if ($class === '') {

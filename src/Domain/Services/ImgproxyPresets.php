@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Domain\Services;
 
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 
 /**
  * What a declared size is as an imgproxy preset (an entry of IMGPROXY_PRESETS). The output format is
  * not in the preset: it is the extension of the URL.
+ *
+ * A cover anchored away from the center adds a `gravity`, the position imgproxy keeps when it crops.
  *
  * A cover is `fill-down` unless it may enlarge: imgproxy then crops an undersized result to keep the
  * ratio, which is the size the module advertises for an original too small to fill the box.
@@ -25,7 +28,9 @@ final class ImgproxyPresets
             Fit::Scale, Fit::Contain => 'fit',
         };
 
-        return sprintf('%s=resize:%s:%d:%d:%d/quality:%d', $spec->name, $type, $spec->width ?? 0, $spec->height ?? 0, (int) $spec->upscale, $spec->quality);
+        $gravity = $spec->anchor === Anchor::Center ? '' : '/gravity:'.$spec->anchor->imgproxyGravity();
+
+        return sprintf('%s=resize:%s:%d:%d:%d%s/quality:%d', $spec->name, $type, $spec->width ?? 0, $spec->height ?? 0, (int) $spec->upscale, $gravity, $spec->quality);
     }
 
     /**

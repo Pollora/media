@@ -39,7 +39,7 @@ final readonly class WordPressImageProcessor implements ImageProcessor
 
         [$width, $height] = $this->geometry->dimensions($spec, $originalWidth, $originalHeight);
         $region = $spec->fit === Fit::Cover
-            ? $this->geometry->coverRegion($originalWidth, $originalHeight, (int) $spec->width, (int) $spec->height)
+            ? $this->geometry->coverRegion($originalWidth, $originalHeight, (int) $spec->width, (int) $spec->height, $spec->anchor)
             : ['x' => 0, 'y' => 0, 'width' => $originalWidth, 'height' => $originalHeight];
 
         $editor->set_quality($spec->quality);

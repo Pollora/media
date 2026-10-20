@@ -64,6 +64,6 @@ final readonly class BunnyThumbnailDriver implements ThumbnailDriver
 
     public function refusal(ImageSizeSpec $spec): ?string
     {
-        return $this->classes->refusal($spec->name, array_keys($this->sizes->withVariants()));
+        return $this->classes->refusal($spec->name, array_keys($this->sizes->withVariants()), $spec);
     }
 }

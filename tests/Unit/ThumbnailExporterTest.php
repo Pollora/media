@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Application\Services\ThumbnailExporter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Tests\Fixtures\FakePullZone;
@@ -80,6 +81,14 @@ it('warns about what Bunny does not guarantee, and says nothing of a size it han
     $this->sizes->add('box')->contain(800, 800)->avif(60);
 
     expect(($this->exporter)()->export('bunny', execute: false)->warnings[0])->toContain('"box"')->toContain('AVIF');
+});
+
+it('leaves an anchored cover out of a Bunny export and says why', function (): void {
+    $this->sizes->add('portrait')->cover(400, 500, Anchor::Top);
+
+    $bunny = ($this->exporter)()->export('bunny', execute: false);
+
+    expect($bunny->created)->not->toContain('portrait')->and($bunny->warnings[0])->toContain('"portrait"')->toContain('anchored to the top');
 });
 
 it('needs the pull zone and the key for Bunny, and never prints the key', function (): void {
