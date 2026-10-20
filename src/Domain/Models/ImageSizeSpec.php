@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pollora\Media\Domain\Models;
 
 use InvalidArgumentException;
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
 
@@ -29,6 +30,7 @@ final readonly class ImageSizeSpec
         public bool $upscale = false,
         public bool $eager = false,
         public array $widths = [],
+        public Anchor $anchor = Anchor::Center,
     ) {
         if ($width === null && $height === null) {
             throw new InvalidArgumentException(sprintf('The size "%s" needs a width, a height, or both.', $name));
@@ -41,6 +43,10 @@ final readonly class ImageSizeSpec
         if ($fit !== Fit::Scale && ($width === null || $height === null)) {
             throw new InvalidArgumentException(sprintf('The size "%s" is a %s: it needs a width and a height.', $name, $fit->value));
         }
+
+        if ($anchor !== Anchor::Center && $fit !== Fit::Cover) {
+            throw new InvalidArgumentException(sprintf('The size "%s" is a %s: an anchor only means something for a cover.', $name, $fit->value));
+        }
     }
 
     /**
@@ -48,7 +54,14 @@ final readonly class ImageSizeSpec
      */
     public function fingerprint(): string
     {
-        return implode('|', [$this->fit->value, $this->width ?? '', $this->height ?? '', $this->format->value, $this->quality, (int) $this->upscale]);
+        $parts = [$this->fit->value, $this->width ?? '', $this->height ?? '', $this->format->value, $this->quality, (int) $this->upscale];
+
+        // Left out when centered, so the files and the URLs of the sizes declared before anchors existed do not change.
+        if ($this->anchor !== Anchor::Center) {
+            $parts[] = $this->anchor->value;
+        }
+
+        return implode('|', $parts);
     }
 
     /**

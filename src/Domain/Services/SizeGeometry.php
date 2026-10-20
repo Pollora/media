@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Domain\Services;
 
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 
@@ -27,11 +28,11 @@ final class SizeGeometry
     }
 
     /**
-     * The part of the original a cover keeps: the largest centered region with the ratio of the box.
+     * The part of the original a cover keeps: the largest region with the ratio of the box, placed by the anchor.
      *
      * @return array{x: int, y: int, width: int, height: int}
      */
-    public function coverRegion(int $originalWidth, int $originalHeight, int $boxWidth, int $boxHeight): array
+    public function coverRegion(int $originalWidth, int $originalHeight, int $boxWidth, int $boxHeight, Anchor $anchor = Anchor::Center): array
     {
         $ratio = $boxWidth / $boxHeight;
 
@@ -43,7 +44,24 @@ final class SizeGeometry
             $height = (int) round($originalWidth / $ratio);
         }
 
-        return ['x' => intdiv($originalWidth - $width, 2), 'y' => intdiv($originalHeight - $height, 2), 'width' => $width, 'height' => $height];
+        return [
+            'x' => $this->placed($originalWidth - $width, $anchor->horizontal()),
+            'y' => $this->placed($originalHeight - $height, $anchor->vertical()),
+            'width' => $width,
+            'height' => $height,
+        ];
+    }
+
+    /**
+     * Where a region starts along an axis that has `$room` pixels to spare.
+     */
+    private function placed(int $room, int $side): int
+    {
+        return match ($side) {
+            -1 => 0,
+            1 => $room,
+            default => intdiv($room, 2),
+        };
     }
 
     /**

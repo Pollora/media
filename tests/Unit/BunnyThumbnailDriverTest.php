@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Pollora\Media\Application\Services\ImageSizes;
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Models\MediaConfig;
@@ -66,4 +67,13 @@ it('refuses a size with no letter or digit', function (): void {
     $this->sizes->add('_')->scale(width: 100);
 
     expect($this->driver->refusal(new ImageSizeSpec('_', Fit::Scale, 100, null)))->toContain('letters and digits');
+});
+
+it('refuses a size anchored away from the center, which it cannot crop, and serves no URL for it', function (): void {
+    $this->sizes->add('portrait')->cover(400, 500, Anchor::Top);
+    $driver = new BunnyThumbnailDriver(new MediaConfig('https://media.client.fr'), $this->sizes);
+
+    expect($driver->refusal($this->sizes->get('portrait')))->toContain('anchored to the top')
+        ->and($driver->sizeOf('https://media.client.fr/a.jpg?class=portrait'))->toBeNull()
+        ->and($driver->refusal($this->card))->toBeNull();
 });

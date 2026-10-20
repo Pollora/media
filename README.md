@@ -111,15 +111,18 @@ use Pollora\Media\ImageSize;   // in Pollora: Pollora\Support\Facades\ImageSize
 ImageSize::add('card')->cover(600, 400)->webp(75);
 ImageSize::add('hero')->scale(width: 1920)->webp(70)->widths([640, 1024, 1440]);
 ImageSize::add('thumb')->cover(150, 150)->eager();
+ImageSize::add('portrait')->cover(400, 500, Anchor::Top);   // use Pollora\Media\Domain\Enums\Anchor
 ```
 
 | Option | Role | Default |
 |---|---|---|
-| `cover(w, h)`, `scale(width:, height:)`, `contain(w, h)` | How the image fits: crop to the box, resize keeping the ratio, fit inside the box | none: one is required |
+| `cover(w, h, anchor)`, `scale(width:, height:)`, `contain(w, h)` | How the image fits: crop to the box, resize keeping the ratio, fit inside the box | none: one is required |
 | `webp(q)`, `avif(q)`, `original()` | The format of the file and its quality | WebP, quality 80 |
 | `widths([...])` | Extra widths for a `srcset`, each a bounded size of its own | none |
 | `eager()` | Made when the image is uploaded | no: made when first asked for |
 | `upscale()` | Allow enlarging an original smaller than the size | off: `scale()` and `contain()` never enlarge, and `cover()` keeps the ratio of the box at the size the original allows |
+
+**Where a cover crops.** A `cover()` keeps the center of the image. The `Anchor` argument keeps another part, the nine positions of `add_image_size()`: `Center` (default), `Top`, `Bottom`, `Left`, `Right`, `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`. It is only meaningful for a cover (any other fit refuses it), it never changes the dimensions of the size, and it is part of the signature: changing it changes the name of the files and the `v` of a service URL, so no cache keeps the old crop. With `imgproxy` it becomes a `gravity` in the preset. **Bunny** refuses a size anchored away from the center, as it does a class name that does not fit (`thumbs export` and `pollora:doctor` say so): no parameter of a class is known to move the crop it makes to a ratio, and the size would be served centered under a URL that promises another crop.
 
 A size is used by its name, as any WordPress size: `wp_get_attachment_image($id, 'card')`, `the_post_thumbnail('hero')`, `wp_get_attachment_image_src()`.
 

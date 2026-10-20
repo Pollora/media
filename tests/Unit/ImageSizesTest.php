@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Pollora\Media\Application\Services\ImageSizes;
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
@@ -117,4 +118,25 @@ it('recognises the file of an extra width as that size, and a stem with dashes a
 
     expect($parsed)->toMatchArray(['stem' => 'my-photo-2', 'name' => 'hero-400w', 'width' => 400, 'height' => 267])
         ->and($name->parse($name->for('my-photo.jpg', $sizes->get('hero'), 3000, 2000)))->toMatchArray(['stem' => 'my-photo', 'name' => 'hero', 'directory' => '']);
+});
+
+it('declares the anchor of a cover, and forgets it when the size becomes another fit', function (): void {
+    $this->sizes->add('portrait')->cover(400, 500, Anchor::Top);
+    $this->sizes->add('banner')->cover(1600, 400, anchor: Anchor::TopLeft);
+    $this->sizes->add('plain')->cover(300, 300);
+    $this->sizes->add('refit')->cover(300, 300, Anchor::Bottom)->scale(width: 300);
+
+    expect($this->sizes->get('portrait')->anchor)->toBe(Anchor::Top)
+        ->and($this->sizes->get('banner')->anchor)->toBe(Anchor::TopLeft)
+        ->and($this->sizes->get('plain')->anchor)->toBe(Anchor::Center)
+        ->and($this->sizes->get('refit')->anchor)->toBe(Anchor::Center);
+});
+
+it('gives the files of an anchored size another name than the same size centered', function (): void {
+    $this->sizes->add('portrait')->cover(400, 500);
+    $centered = $this->sizes->names()->for('2026/10/photo.jpg', $this->sizes->get('portrait'), 3000, 2000);
+    $this->sizes->add('portrait')->cover(400, 500, Anchor::Top);
+    $anchored = $this->sizes->names()->for('2026/10/photo.jpg', $this->sizes->get('portrait'), 3000, 2000);
+
+    expect($anchored)->not->toBe($centered);
 });
