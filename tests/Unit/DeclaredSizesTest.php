@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 use Pollora\Media\Application\Services\ImageSizes;
+use Pollora\Media\Domain\Contracts\ThumbnailDriver;
+use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Infrastructure\WordPress\DeclaredSizes;
 use Pollora\Media\Tests\Fixtures\FakeImageProcessor;
@@ -25,6 +27,7 @@ beforeEach(function (): void {
 it('hooks the sizes WordPress makes, the metadata, the URL of a size and the srcset', function (): void {
     Filters\expectAdded('intermediate_image_sizes_advanced')->once();
     Filters\expectAdded('wp_generate_attachment_metadata')->once();
+    Filters\expectAdded('wp_update_attachment_metadata')->once();
     Filters\expectAdded('image_downsize')->once();
     Filters\expectAdded('wp_calculate_image_srcset')->once();
 
@@ -137,4 +140,78 @@ it('makes at upload only the sizes declared eager, the others wait for their fir
 
     expect(array_column($processor->made, 'size'))->toBe(['card'])
         ->and($meta['sizes'])->not->toHaveKey('lazy');
+});
+
+describe('an image edited in the media library', function (): void {
+    beforeEach(function (): void {
+        $this->edited = ['file' => '2026/10/photo-e1729000000.jpg', 'width' => 2000, 'height' => 2000, 'sizes' => []];
+        $this->disk->storage->write('2026/10/photo-e1729000000.jpg', 'edited');
+    });
+
+    it('gets the eager sizes of its new original, as at upload', function (): void {
+        Functions\expect('wp_get_attachment_metadata')->once()->with(7)->andReturn($this->meta);
+
+        $meta = $this->declared->remake($this->edited, 7);
+        $editedCard = $this->sizes->names()->for('2026/10/photo-e1729000000.jpg', $this->sizes->get('card'), 2000, 2000);
+
+        expect(array_column($this->processor->made, 'size'))->toBe(['card', 'hero', 'hero-640w', 'hero-1024w'])
+            ->and($meta['sizes']['card']['file'])->toBe(basename($editedCard))
+            ->and($this->disk->storage->exists($editedCard))->toBeTrue()
+            ->and($this->disk->storage->exists($this->cardFile))->toBeFalse();
+    });
+
+    it('is left alone when the original did not change, which is every other save of the metadata', function (): void {
+        Functions\expect('wp_get_attachment_metadata')->once()->with(7)->andReturn($this->meta);
+
+        expect($this->declared->remake($this->meta, 7))->toBe($this->meta)
+            ->and($this->processor->made)->toBe([]);
+    });
+
+    it('is left alone for an upload, which has no metadata yet and is made by generate()', function (): void {
+        Functions\expect('wp_get_attachment_metadata')->once()->with(7)->andReturn(false);
+
+        expect($this->declared->remake($this->meta, 7))->toBe($this->meta)
+            ->and($this->processor->made)->toBe([]);
+    });
+
+    it('is left alone for what is not an image, or when no size is declared', function (): void {
+        Functions\expect('wp_get_attachment_metadata')->never();
+
+        $empty = new DeclaredSizes(new ImageSizes(fn (): string => 'k'), new MediaConfig('https://m.test'), $this->disk->storage, $this->processor);
+
+        expect($this->declared->remake(['file' => '2026/10/doc.pdf'], 7))->toBe(['file' => '2026/10/doc.pdf'])
+            ->and($this->declared->remake('not metadata', 7))->toBe('not metadata')
+            ->and($empty->remake($this->edited, 7))->toBe($this->edited)
+            ->and($this->processor->made)->toBe([]);
+    });
+
+    it('makes nothing when a service makes the sizes', function (): void {
+        Functions\expect('wp_get_attachment_metadata')->once()->andReturn($this->meta);
+
+        $service = new class implements ThumbnailDriver
+        {
+            public function makesFiles(): bool
+            {
+                return false;
+            }
+
+            public function url(string $file, ImageSizeSpec $spec, int $width, int $height): string
+            {
+                return '';
+            }
+
+            public function sizeOf(string $url): ?string
+            {
+                return null;
+            }
+
+            public function refusal(ImageSizeSpec $spec): ?string
+            {
+                return null;
+            }
+        };
+        $declared = new DeclaredSizes($this->sizes, new MediaConfig('https://media.client.fr'), $this->disk->storage, $this->processor, $service);
+
+        expect($declared->remake($this->edited, 7))->toBe($this->edited)->and($this->processor->made)->toBe([]);
+    });
 });

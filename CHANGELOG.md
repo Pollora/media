@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The `eager()` sizes of an image edited in the media library (cropped, rotated, flipped, or put back by *Restore image*) are made, as at upload. WordPress writes the new original and its own sizes, then saves the metadata without `wp_generate_attachment_metadata`, so the sizes were only worked out in the URLs and never made: a disk served directly, with no fallback, returned broken images until `thumbs warm` ran. `DeclaredSizes::remake()` runs on `wp_update_attachment_metadata` and acts only when the `file` of the metadata changes. The sizes of the previous original stay on the disk, where *Restore image* expects them, and `thumbs prune` keeps them
+- README: the *Apply changes to: thumbnail only* option of the image editor is not followed by a declared size, which is always made from the original
+
 ## [0.7.0] - 2026-10-20
 
 ### Added

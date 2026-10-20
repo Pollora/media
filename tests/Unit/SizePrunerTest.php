@@ -54,3 +54,13 @@ it('treats the bounded size of an extra width like its size', function (): void 
 
     expect((new SizePruner($this->disk->storage, $this->sizes))->stale())->not->toContain($variant);
 });
+
+it('keeps the sizes of the previous original of an edited image, which Restore image goes back to', function (): void {
+    $this->disk->storage->write('2026/10/photo-e1729000000.jpg', 'edited');
+    $edited = $this->names->for('2026/10/photo-e1729000000.jpg', $this->sizes->get('card'), 2000, 2000);
+    $this->disk->storage->write($edited, 'x');
+
+    $found = (new SizePruner($this->disk->storage, $this->sizes))->stale();
+
+    expect($found)->not->toContain($edited)->and($found)->not->toContain($this->current);
+});
