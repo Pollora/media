@@ -9,9 +9,9 @@ use League\Flysystem\Filesystem;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
+use Pollora\Media\Domain\Exceptions\InvalidMediaConfiguration;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
-use RuntimeException;
 
 /**
  * The default adapter, for WordPress without Laravel: a classic theme, a
@@ -99,7 +99,7 @@ final class ConstantsConfiguration
     }
 
     /**
-     * @throws RuntimeException When the driver is unknown or lacks what it needs
+     * @throws InvalidMediaConfiguration When the driver is unknown or lacks what it needs
      */
     public function filesystem(): FilesystemOperator
     {
@@ -112,7 +112,7 @@ final class ConstantsConfiguration
         return match ((string) ($this->read('POLLORA_MEDIA_DRIVER') ?? 'local')) {
             'local' => new Filesystem(new LocalFilesystemAdapter($this->localRoot())),
             's3' => $this->s3(),
-            default => throw new RuntimeException(sprintf('POLLORA_MEDIA_DRIVER "%s" is not known; use "local" or "s3", or provide a filesystem with the pollora/media/filesystem filter.', $this->read('POLLORA_MEDIA_DRIVER'))),
+            default => throw InvalidMediaConfiguration::unknownDriver($this->read('POLLORA_MEDIA_DRIVER')),
         };
     }
 
@@ -121,14 +121,14 @@ final class ConstantsConfiguration
         $bucket = $this->read('POLLORA_MEDIA_BUCKET');
 
         if (! is_string($bucket) || $bucket === '') {
-            throw new RuntimeException('POLLORA_MEDIA_BUCKET is required with POLLORA_MEDIA_DRIVER "s3".');
+            throw InvalidMediaConfiguration::missingBucket();
         }
 
         $adapter = 'League\Flysystem\AwsS3V3\AwsS3V3Adapter';
         $client = 'Aws\S3\S3Client';
 
         if (! class_exists($adapter) || ! class_exists($client)) {
-            throw new RuntimeException('The S3 driver needs league/flysystem-aws-s3-v3: run "composer require league/flysystem-aws-s3-v3".');
+            throw InvalidMediaConfiguration::missingS3Package();
         }
 
         $options = array_filter([

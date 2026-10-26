@@ -6,7 +6,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 
 use InvalidArgumentException;
 use Pollora\Media\Domain\Contracts\BunnyPullZone;
-use RuntimeException;
+use Pollora\Media\Domain\Exceptions\BunnyRequestFailed;
 use SensitiveParameter;
 
 /**
@@ -67,13 +67,13 @@ final readonly class WordPressBunnyPullZone implements BunnyPullZone
         $response = \wp_remote_request(self::ENDPOINT.$pullZone, $args);
 
         if (\is_wp_error($response)) {
-            throw new RuntimeException('Bunny could not be reached: '.$response->get_error_message());
+            throw BunnyRequestFailed::unreachable($response->get_error_message());
         }
 
         $status = (int) \wp_remote_retrieve_response_code($response);
 
         if ($status < 200 || $status >= 300) {
-            throw new RuntimeException(sprintf('Bunny answered %d to %s on the pull zone %s.', $status, $method, $pullZone));
+            throw BunnyRequestFailed::refused($status, $method, $pullZone);
         }
 
         $decoded = json_decode((string) \wp_remote_retrieve_body($response), true);

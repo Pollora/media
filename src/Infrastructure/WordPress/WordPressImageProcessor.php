@@ -7,9 +7,9 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
+use Pollora\Media\Domain\Exceptions\ImageProcessingFailed;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Services\SizeGeometry;
-use RuntimeException;
 
 /**
  * Makes a size with the image editor of WordPress, GD or Imagick, on the
@@ -28,13 +28,13 @@ final readonly class WordPressImageProcessor implements ImageProcessor
         };
 
         if ($mime === '' || ! \wp_image_editor_supports(['mime_type' => $mime])) {
-            throw new RuntimeException(sprintf('The image editor of this server cannot write %s: size "%s" is not made.', $mime === '' ? 'this format' : $mime, $spec->name));
+            throw ImageProcessingFailed::unsupportedFormat($mime, $spec->name);
         }
 
         $editor = \wp_get_image_editor(StreamWrapper::ROOT.'/'.$sourceKey);
 
         if (\is_wp_error($editor)) {
-            throw new RuntimeException($editor->get_error_message());
+            throw ImageProcessingFailed::because($editor->get_error_message());
         }
 
         [$width, $height] = $this->geometry->dimensions($spec, $originalWidth, $originalHeight);
@@ -46,13 +46,13 @@ final readonly class WordPressImageProcessor implements ImageProcessor
         $done = $editor->crop($region['x'], $region['y'], $region['width'], $region['height'], $width, $height);
 
         if (\is_wp_error($done)) {
-            throw new RuntimeException($done->get_error_message());
+            throw ImageProcessingFailed::because($done->get_error_message());
         }
 
         $saved = $editor->save(StreamWrapper::ROOT.'/'.$destinationKey, $mime);
 
         if (\is_wp_error($saved)) {
-            throw new RuntimeException($saved->get_error_message());
+            throw ImageProcessingFailed::because($saved->get_error_message());
         }
 
         return ['width' => (int) $saved['width'], 'height' => (int) $saved['height'], 'mime' => (string) $saved['mime-type'], 'filesize' => (int) @filesize(StreamWrapper::ROOT.'/'.$destinationKey)];
