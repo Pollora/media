@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A media disk that cannot be built (`InvalidMediaConfiguration`), a thumbnail that cannot be made (`ImageProcessingFailed`) and a Bunny request that fails (`BunnyRequestFailed`) throw named exceptions instead of a bare `\RuntimeException`. They extend `\RuntimeException`, so a `catch (\RuntimeException)` keeps working, and the messages keep their wording, with a hint added where one was missing
+
 ## [0.8.0] - 2026-10-20
 
 ### Added
