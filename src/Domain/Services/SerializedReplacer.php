@@ -23,7 +23,7 @@ final class SerializedReplacer
         }
 
         if ($this->looksSerialized($value)) {
-            $data = @unserialize($value, ['allowed_classes' => [stdClass::class]]);
+            $data = @unserialize($value, ['allowed_classes' => [stdClass::class]]); // nosemgrep -- allowed_classes is limited to stdClass: no behaviour can be instantiated
 
             if ($data !== false || $value === 'b:0;') {
                 if ($this->holdsUnknownObject($data)) {
