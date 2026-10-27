@@ -36,7 +36,7 @@
         "pestphp/pest": "^3.8.2",
         "php-stubs/wp-cli-stubs": "dev-master",
         "phpstan/phpstan": "^2.1.16",
-        "pollora/harness": "^0.1.4",
+        "pollora/harness": "^0.1.6",
         "szepeviktor/phpstan-wordpress": "^2.0"
     },
     "autoload": {
