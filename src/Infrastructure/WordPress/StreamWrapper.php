@@ -144,7 +144,7 @@ final class StreamWrapper
     {
         $key = self::keyOf($path);
 
-        if ($key === null || $key === '' || self::$storage === null) {
+        if ($key === null || $key === '' || ! self::$storage instanceof MediaStorage) {
             return $this->fail();
         }
 
@@ -165,7 +165,7 @@ final class StreamWrapper
                 return $this->fail();
             }
 
-            if (($kind === 'r' || $kind === 'a' || $kind === 'c') && $exists) {
+            if ((in_array($kind, ['r', 'a', 'c'], true)) && $exists) {
                 $this->load($key, $copy);
             }
 
@@ -243,7 +243,7 @@ final class StreamWrapper
 
     public function stream_close(): void
     {
-        if ($this->writable && $this->dirty && self::$storage !== null && is_resource($this->buffer)) {
+        if ($this->writable && $this->dirty && self::$storage instanceof MediaStorage && is_resource($this->buffer)) {
             rewind($this->buffer);
             self::$storage->write($this->key, $this->buffer, ['CacheControl' => self::$config?->cacheControl]);
 
@@ -276,7 +276,7 @@ final class StreamWrapper
     {
         $key = self::keyOf($path);
 
-        if ($key === null || self::$storage === null) {
+        if ($key === null || ! self::$storage instanceof MediaStorage) {
             return false;
         }
 
@@ -303,7 +303,7 @@ final class StreamWrapper
     {
         $key = self::keyOf($path);
 
-        if ($key === null || self::$storage === null) {
+        if ($key === null || ! self::$storage instanceof MediaStorage) {
             return false;
         }
 
@@ -327,7 +327,7 @@ final class StreamWrapper
         $source = self::keyOf($from);
         $destination = self::keyOf($to);
 
-        if ($source === null || $destination === null || self::$storage === null) {
+        if ($source === null || $destination === null || ! self::$storage instanceof MediaStorage) {
             return false;
         }
 
@@ -351,7 +351,7 @@ final class StreamWrapper
     {
         $key = self::keyOf($path);
 
-        if ($key === null || $key === '' || self::$storage === null) {
+        if ($key === null || $key === '' || ! self::$storage instanceof MediaStorage) {
             return false;
         }
 
@@ -370,7 +370,7 @@ final class StreamWrapper
     {
         $key = self::keyOf($path);
 
-        if ($key === null || self::$storage === null) {
+        if ($key === null || ! self::$storage instanceof MediaStorage) {
             return false;
         }
 
@@ -379,6 +379,7 @@ final class StreamWrapper
             foreach (self::$storage->list($key) as $entry) {
                 $names[] = basename($entry['path']);
             }
+
             $this->entries = $names;
             $this->position = 0;
 

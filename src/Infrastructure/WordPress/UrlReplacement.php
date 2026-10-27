@@ -65,7 +65,7 @@ final class UrlReplacement
         $changed = [];
 
         foreach (self::TARGETS as ['table' => $table, 'id' => $id, 'column' => $column]) {
-            $name = $this->database->{$table === 'posts' ? 'posts' : $table};
+            $name = $this->database->{$table};
             $count = 0;
             $last = 0;
             $like = '%'.$this->database->esc_like($search).'%';

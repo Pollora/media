@@ -33,8 +33,8 @@ final class ThumbnailDrivers
                 ThumbnailDriverSettings::IMGPROXY => self::imgproxy($settings, $config),
                 default => throw new InvalidArgumentException(sprintf('The sizes driver "%s" is not known; use "pollora", "bunny" or "imgproxy".', $settings->driver)),
             };
-        } catch (InvalidArgumentException $exception) {
-            $report($exception->getMessage().' The default driver is used.');
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            $report($invalidArgumentException->getMessage().' The default driver is used.');
 
             return new PolloraThumbnailDriver($sizes->names(), $config);
         }

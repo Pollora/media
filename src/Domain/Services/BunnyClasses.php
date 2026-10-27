@@ -77,8 +77,13 @@ final class BunnyClasses
             $properties['aspect_ratio'] = ((int) $spec->width / $divisor).':'.((int) $spec->height / $divisor);
             $properties['width'] = (string) $spec->width;
         } else {
-            $spec->width !== null && $properties['width'] = (string) $spec->width;
-            $spec->height !== null && $properties['height'] = (string) $spec->height;
+            if ($spec->width !== null) {
+                $properties['width'] = (string) $spec->width;
+            }
+
+            if ($spec->height !== null) {
+                $properties['height'] = (string) $spec->height;
+            }
         }
 
         $properties['quality'] = (string) $spec->quality;
@@ -89,7 +94,9 @@ final class BunnyClasses
             OutputFormat::Original => null,
         };
 
-        $spec->upscale && $properties['upscaling'] = 'resampling';
+        if ($spec->upscale) {
+            $properties['upscaling'] = 'resampling';
+        }
 
         ksort($properties);
 
