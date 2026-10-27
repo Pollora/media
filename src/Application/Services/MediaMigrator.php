@@ -31,8 +31,10 @@ final readonly class MediaMigrator
      */
     public function migrate(bool $dryRun = true, ?Closure $progress = null, array $exclude = []): MigrationReport
     {
-        $copied = $skipped = $failed = $excluded = [];
-
+        $copied = [];
+        $skipped = [];
+        $failed = [];
+        $excluded = [];
         $files = array_filter($this->from->list('', true), static fn (array $entry): bool => $entry['type'] === 'file');
         usort($files, static fn (array $a, array $b): int => strcmp($a['path'], $b['path']));
 

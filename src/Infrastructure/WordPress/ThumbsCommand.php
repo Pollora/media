@@ -57,8 +57,8 @@ final readonly class ThumbsCommand
 
         try {
             $report = $this->warmer->warm($assoc['size'] ?? null, $assoc['since'] ?? null);
-        } catch (InvalidArgumentException $exception) {
-            WP_CLI::error($exception->getMessage());
+        } catch (InvalidArgumentException $invalidArgumentException) {
+            WP_CLI::error($invalidArgumentException->getMessage());
 
             return;
         }

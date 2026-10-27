@@ -23,6 +23,7 @@ final class AttachmentFiles
     {
         $metadata = \wp_get_attachment_metadata($attachmentId);
         $metadata = is_array($metadata) ? $metadata : [];
+
         $file = (string) ($metadata['file'] ?? '');
 
         if ($file === '') {

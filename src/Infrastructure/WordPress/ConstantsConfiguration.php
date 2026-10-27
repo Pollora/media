@@ -52,11 +52,11 @@ final class ConstantsConfiguration
     public function config(): MediaConfig
     {
         $legacy = $this->read('POLLORA_MEDIA_LEGACY_URLS') ?? [];
-        $legacy = is_string($legacy) ? array_map('trim', explode(',', $legacy)) : (array) $legacy;
+        $legacy = is_string($legacy) ? array_map(trim(...), explode(',', $legacy)) : (array) $legacy;
 
         return new MediaConfig(
             (string) ($this->read('POLLORA_MEDIA_URL') ?? rtrim((string) $this->read('WP_CONTENT_URL'), '/').'/uploads'),
-            array_values(array_filter(array_map('strval', $legacy), static fn (string $url): bool => $url !== '')),
+            array_values(array_filter(array_map(strval(...), $legacy), static fn (string $url): bool => $url !== '')),
             (string) ($this->read('POLLORA_MEDIA_CACHE_CONTROL') ?? 'public, max-age=31536000, immutable'),
             (string) ($this->read('POLLORA_MEDIA_PRIVATE_EXPIRY') ?? '+6 hours'),
             (bool) ($this->read('POLLORA_MEDIA_ASYNC_THUMBNAILS') ?? false),

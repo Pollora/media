@@ -296,7 +296,7 @@ final class DeclaredSizes
      */
     private function isKeptFromService(int $attachmentId): bool
     {
-        return ! $this->driver->makesFiles() && $this->isPrivate !== null && ($this->isPrivate)($attachmentId);
+        return ! $this->driver->makesFiles() && $this->isPrivate instanceof Closure && ($this->isPrivate)($attachmentId);
     }
 
     private function parentOf(ImageSizeSpec $variant): ?ImageSizeSpec

@@ -62,7 +62,11 @@ final readonly class ThumbnailExporter
 
         $mapping = new BunnyClasses;
         $classes = $this->bunny->classes($pullZone);
-        $created = $updated = $unchanged = $warnings = $lines = [];
+        $created = [];
+        $updated = [];
+        $unchanged = [];
+        $warnings = [];
+        $lines = [];
 
         $sizeNames = array_keys($this->sizes->withVariants());
 
@@ -109,7 +113,8 @@ final readonly class ThumbnailExporter
     private function imgproxy(): ExportReport
     {
         $presets = new ImgproxyPresets;
-        $definitions = $warnings = [];
+        $definitions = [];
+        $warnings = [];
 
         foreach ($this->sizes->withVariants() as $spec) {
             $refusal = $presets->refusal($spec);
@@ -169,7 +174,7 @@ final readonly class ThumbnailExporter
      */
     private function normalized(array $properties): array
     {
-        $properties = array_map('strval', $properties);
+        $properties = array_map(strval(...), $properties);
         ksort($properties);
 
         return $properties;

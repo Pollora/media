@@ -148,8 +148,8 @@ final class PrivateMedia
      */
     public function setPrivate(int $attachmentId, bool $private): array
     {
-        $changed = $failed = [];
-
+        $changed = [];
+        $failed = [];
         foreach ($this->files->for($attachmentId) as $file) {
             try {
                 $this->storage->setVisibility($file, $private ? 'private' : 'public');

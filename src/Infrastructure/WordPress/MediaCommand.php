@@ -144,7 +144,7 @@ final class MediaCommand
             WP_CLI::error('The source folder does not exist: '.$from);
         }
 
-        $exclude = array_values(array_filter(array_map('trim', explode(',', (string) ($assoc['exclude'] ?? '')))));
+        $exclude = array_values(array_filter(array_map(trim(...), explode(',', (string) ($assoc['exclude'] ?? '')))));
 
         $report = (new MediaMigrator(new FlysystemMediaStorage(new Filesystem(new LocalFilesystemAdapter($from))), $this->storage, $this->config->cacheControl))
             ->migrate(! $execute, static function (string $path, string $outcome): void {
