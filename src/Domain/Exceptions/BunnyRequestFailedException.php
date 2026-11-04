@@ -9,7 +9,7 @@ use RuntimeException;
 /**
  * Thrown when the Bunny API cannot be reached or refuses a request.
  */
-final class BunnyRequestFailed extends RuntimeException
+final class BunnyRequestFailedException extends RuntimeException
 {
     /**
      * @param  string  $reason  What the HTTP client reported

@@ -9,7 +9,7 @@ use RuntimeException;
 /**
  * Thrown when a thumbnail cannot be made.
  */
-final class ImageProcessingFailed extends RuntimeException
+final class ImageProcessingFailedException extends RuntimeException
 {
     /**
      * @param  string  $mime  The format asked for, or an empty string when it is unknown

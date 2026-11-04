@@ -9,7 +9,7 @@ use RuntimeException;
 /**
  * Thrown when the media constants describe a disk that cannot be built.
  */
-final class InvalidMediaConfiguration extends RuntimeException
+final class InvalidMediaConfigurationException extends RuntimeException
 {
     /**
      * @param  mixed  $driver  What POLLORA_MEDIA_DRIVER holds
