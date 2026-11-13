@@ -70,3 +70,23 @@ it('leaves WordPress to answer when the module has nothing to say', function ():
     expect($this->route->resolve('/content/uploads/2026/10/photo-card-600x400-0123456789ab.webp')?->status)->toBe(404)
         ->and($this->route->resolve('/shop/'))->toBeNull();
 });
+
+it('does not end the request for a path that is not a size', function (): void {
+    $_SERVER['REQUEST_URI'] = '/shop/';
+
+    $this->route->handle();
+
+    expect(true)->toBeTrue();
+})->after(function (): void {
+    unset($_SERVER['REQUEST_URI']);
+});
+
+it('does not end the request for a size it cannot make: WordPress answers', function (): void {
+    $_SERVER['REQUEST_URI'] = '/content/uploads/2026/10/gone-card-600x400-0123456789ab.webp';
+
+    $this->route->handle();
+
+    expect($this->route->resolve($_SERVER['REQUEST_URI'])?->status)->toBe(404);
+})->after(function (): void {
+    unset($_SERVER['REQUEST_URI']);
+});

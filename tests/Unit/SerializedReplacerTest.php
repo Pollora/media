@@ -33,3 +33,11 @@ it('leaves a value without the string alone, byte for byte', function (): void {
     expect((new SerializedReplacer)->replace($value, 'https://old.test', 'https://m.test'))->toBe($value)
         ->and((new SerializedReplacer)->replace('s:3:"abc";garbage', 'zzz', 'y'))->toBe('s:3:"abc";garbage');
 });
+
+it('leaves a value that holds an object of a class it does not know untouched, at any depth', function (string $value): void {
+    expect((new SerializedReplacer)->replace($value, 'https://old.test', 'https://m.test'))->toBe($value);
+})->with([
+    'at the root' => ['O:7:"Unknown":1:{s:3:"url";s:20:"https://old.test/a.j";}'],
+    'in an array' => ['a:1:{s:1:"k";O:7:"Unknown":1:{s:3:"url";s:20:"https://old.test/a.j";}}'],
+    'in an object' => ['O:8:"stdClass":1:{s:1:"k";O:7:"Unknown":1:{s:3:"url";s:20:"https://old.test/a.j";}}'],
+]);
