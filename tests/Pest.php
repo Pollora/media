@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Brain\Monkey;
 
+require_once __DIR__.'/Fixtures/WpCli.php';
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
