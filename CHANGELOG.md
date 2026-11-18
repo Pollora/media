@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The remaining name checks anchor with `D` too: a size declared as `card` followed by a newline is refused (it was accepted), the size segment of an imgproxy URL, the sizes already made that stand in for one that cannot be made, and the parent lookup of an extra width ignore a name ending with a newline. The pruner compares a file signature with `hash_equals()` instead of `!==` (SEC-06)
 
+- The id of a Bunny pull zone (it goes into the URL of the Bunny API) no longer accepts a trailing newline: `"1234\n"` was accepted by `/^\d+$/` and is now refused before any request. The loopback host check of the thumbnail export and the multisite folder match of the uploads base anchor with `D` too, as defence in depth (a host parsed by `parse_url()` and a WordPress `basedir` cannot carry a newline today) (SEC-06)
+
 ### Changed
 
 - A media disk that cannot be built (`InvalidMediaConfigurationException`), a thumbnail that cannot be made (`ImageProcessingFailedException`) and a Bunny request that fails (`BunnyRequestFailedException`) throw named exceptions instead of a bare `\RuntimeException`. They extend `\RuntimeException`, so a `catch (\RuntimeException)` keeps working, and the messages keep their wording, with a hint added where one was missing

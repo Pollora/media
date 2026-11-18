@@ -77,3 +77,10 @@ it('refuses a pull zone that is not an id before it builds a URL', function (): 
     expect(fn () => (new WordPressBunnyPullZone('k'))->classes('12/../34'))->toThrow(InvalidArgumentException::class)
         ->and($this->requests)->toHaveCount(0);
 });
+
+it('refuses a pull zone id that ends with a newline: the id goes into the URL of the API', function (): void {
+    answering(['response' => ['code' => 200], 'body' => '{}'], $this->requests);
+
+    expect(fn () => (new WordPressBunnyPullZone('k'))->classes("1234\n"))->toThrow(InvalidArgumentException::class)
+        ->and($this->requests)->toHaveCount(0);
+});
