@@ -140,3 +140,12 @@ it('gives the files of an anchored size another name than the same size centered
 
     expect($anchored)->not->toBe($centered);
 });
+
+it('refuses a size name that ends with a newline: the $ of the pattern would let it through', function (): void {
+    $this->sizes->add("card\n")->cover(100, 100);
+    $this->sizes->add('card')->cover(100, 100);
+
+    expect(array_keys($this->sizes->all()))->toBe(['card'])
+        ->and($this->sizes->refusals())->toHaveCount(1)
+        ->and($this->sizes->get("card\n"))->toBeNull();
+});

@@ -72,3 +72,8 @@ it('changes URL when the size changes, without changing the signature of the pat
     expect($after)->not->toBe($before)
         ->and(strstr($after, '?', true))->toBe(strstr($before, '?', true));
 });
+
+it('does not find a size in a URL whose size segment ends with a newline', function (): void {
+    expect($this->driver->sizeOf('https://img.client.fr/sig/card/plain/x.jpg@webp'))->toBe('card')
+        ->and($this->driver->sizeOf("https://img.client.fr/sig/card\n/plain/x.jpg@webp"))->toBeNull();
+});

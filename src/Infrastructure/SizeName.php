@@ -10,5 +10,5 @@ namespace Pollora\Media\Infrastructure;
  */
 final class SizeName
 {
-    public const string PATTERN = '/^[a-z0-9_]+(?:-\d+w)?$/';
+    public const string PATTERN = '/^[a-z0-9_]+(?:-\d+w)?$/D';
 }

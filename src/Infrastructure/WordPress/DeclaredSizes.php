@@ -301,7 +301,7 @@ final class DeclaredSizes
 
     private function parentOf(ImageSizeSpec $variant): ?ImageSizeSpec
     {
-        return preg_match('/^(.+)-\d+w$/', $variant->name, $match) === 1 ? $this->sizes->get($match[1]) : null;
+        return preg_match('/^(.+)-\d+w$/D', $variant->name, $match) === 1 ? $this->sizes->get($match[1]) : null;
     }
 
     /**
