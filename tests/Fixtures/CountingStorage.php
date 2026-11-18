@@ -23,6 +23,9 @@ final class CountingStorage implements MediaStorage
     /** @var array<string, array<string, mixed>> The options of each write, by path */
     public array $writeOptions = [];
 
+    /** @var list<string> Paths a listing reports that the real storage would refuse to hold (a control character) */
+    public array $listedAlso = [];
+
     public function __construct(private readonly MediaStorage $inner) {}
 
     public function exists(string $path): bool
@@ -97,6 +100,12 @@ final class CountingStorage implements MediaStorage
 
     public function list(string $path, bool $deep = false): array
     {
-        return $this->inner->list($path, $deep);
+        $listed = $this->inner->list($path, $deep);
+
+        foreach ($this->listedAlso as $extra) {
+            $listed[] = ['path' => $extra, 'type' => 'file', 'size' => 1, 'lastModified' => 0];
+        }
+
+        return $listed;
     }
 }

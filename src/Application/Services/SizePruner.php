@@ -53,7 +53,7 @@ final readonly class SizePruner
 
             $spec = $declared[$parsed['name']] ?? null;
 
-            if ($spec === null || $this->sizes->names()->signature($original, $spec) !== $parsed['signature']) {
+            if ($spec === null || ! hash_equals($this->sizes->names()->signature($original, $spec), $parsed['signature'])) {
                 $stale[] = (string) $path;
             }
         }

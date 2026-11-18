@@ -171,7 +171,7 @@ final readonly class ThumbnailService
 
             $name = basename($entry['path']);
 
-            if (preg_match('/^'.preg_quote($parsed['stem'], '/').'-(?:[a-z0-9_]+-)?(\d+)x(\d+)(?:-[0-9a-f]{12})?\.(jpe?g|png|webp|avif)$/', $name, $match) === 1) {
+            if (preg_match('/^'.preg_quote($parsed['stem'], '/').'-(?:[a-z0-9_]+-)?(\d+)x(\d+)(?:-[0-9a-f]{12})?\.(jpe?g|png|webp|avif)$/D', $name, $match) === 1) {
                 $candidates[$entry['path']] = (int) $match[1];
             }
         }

@@ -164,3 +164,18 @@ it('serves the file another process made while it waited for the lock', function
 
     expect($result->status)->toBe(200)->and(stream_get_contents($result->body))->toBe('made elsewhere')->and($this->processor->made)->toBe([]);
 });
+
+it('does not take a file whose name ends with a newline for a size already made', function (): void {
+    $this->disk->storage->write('2026/10/photo-300x200.jpg', 'medium');
+    $this->counting->listedAlso = ["2026/10/photo-2048x1366.jpg\n"];
+    $lock = new FlockGenerationLock($this->lockDir);
+    $busy = [$lock->slot(2, 0), $lock->slot(2, 0)];
+
+    $result = ($this->make)()->serve($this->file);
+
+    expect($result->status)->toBe(200)->and(stream_get_contents($result->body))->toBe('medium');
+
+    foreach ($busy as $slot) {
+        $slot?->release();
+    }
+});

@@ -38,7 +38,7 @@ final readonly class SizeWarmer
                 throw new InvalidArgumentException(sprintf('The size "%s" is not declared.', $only));
             }
 
-            $specs = [$only => $specs[$only], ...array_filter($specs, static fn ($spec): bool => str_starts_with($spec->name, $only.'-') && preg_match('/-\d+w$/', $spec->name) === 1)];
+            $specs = [$only => $specs[$only], ...array_filter($specs, static fn ($spec): bool => str_starts_with($spec->name, $only.'-') && preg_match('/-\d+w$/D', $spec->name) === 1)];
         }
 
         $report = ['checked' => 0, 'made' => 0, 'failed' => 0];

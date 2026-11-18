@@ -124,7 +124,7 @@ final class ImageSizeDeclaration
      */
     public function toSpec(): ImageSizeSpec
     {
-        if (preg_match('/^[a-z0-9_]+$/', $this->name) !== 1) {
+        if (preg_match('/^[a-z0-9_]+$/D', $this->name) !== 1) {
             throw new InvalidArgumentException(sprintf('The size name "%s" must be lowercase letters, digits and underscores.', $this->name));
         }
 
