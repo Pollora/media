@@ -54,7 +54,8 @@ final readonly class ThumbnailService
     {
         $key = ltrim($key, '/');
 
-        if ($key === '' || str_contains($key, '..') || str_contains($key, "\0") || str_contains($key, '//')) {
+        // Control characters (a trailing newline slips past a `$` anchor) are never part of a name the site makes.
+        if ($key === '' || str_contains($key, '..') || str_contains($key, '//') || preg_match('/[\x00-\x1f\x7f]/', $key) === 1) {
             return ThumbnailResult::notFound();
         }
 
