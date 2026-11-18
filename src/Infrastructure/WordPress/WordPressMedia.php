@@ -132,7 +132,7 @@ final class WordPressMedia
             return $dirs;
         }
 
-        $site = preg_match('#/sites/\d+$#', (string) $dirs['basedir'], $match) === 1 ? $match[0] : '';
+        $site = preg_match('#/sites/\d+$#D', (string) $dirs['basedir'], $match) === 1 ? $match[0] : '';
         $subdir = (string) $dirs['subdir'];
 
         $dirs['basedir'] = StreamWrapper::ROOT.$site;

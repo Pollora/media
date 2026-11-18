@@ -151,7 +151,7 @@ final readonly class ThumbnailExporter
     {
         $host = strtolower(trim((string) parse_url($url, PHP_URL_HOST), '[]'));
 
-        return $host === 'localhost' || $host === '::1' || preg_match('/^127\.\d+\.\d+\.\d+$/', $host) === 1;
+        return $host === 'localhost' || $host === '::1' || preg_match('/^127\.\d+\.\d+\.\d+$/D', $host) === 1;
     }
 
     /**

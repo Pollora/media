@@ -49,7 +49,7 @@ final readonly class WordPressBunnyPullZone implements BunnyPullZone
      */
     private function request(string $method, string $pullZone, ?array $payload = null): array
     {
-        if (preg_match('/^\d+$/', $pullZone) !== 1) {
+        if (preg_match('/^\d+$/D', $pullZone) !== 1) {
             throw new InvalidArgumentException('The id of a Bunny pull zone is a number.');
         }
 
