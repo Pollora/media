@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-19
+
 ### Security
 
 - A request for a size no longer gets past the name checks with a trailing newline or another control character (the `$` of the patterns matched before a final newline): it is a 404 before anything reaches the storage, where it used to end in a 500. The route and the name parser now anchor with `D`. The guarantee that only declared, signed sizes are ever made is now locked by `DeclaredSizesContractTest` (SEC-06)
