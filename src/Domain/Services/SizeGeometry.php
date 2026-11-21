@@ -6,6 +6,7 @@ namespace Pollora\Media\Domain\Services;
 
 use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 
 /**
@@ -28,11 +29,12 @@ final class SizeGeometry
     }
 
     /**
-     * The part of the original a cover keeps: the largest region with the ratio of the box, placed by the anchor.
+     * The part of the original a cover keeps: the largest region with the ratio of the box, placed by the anchor, or
+     * centred on the focal point of the image (which replaces the anchor) and kept inside the image.
      *
      * @return array{x: int, y: int, width: int, height: int}
      */
-    public function coverRegion(int $originalWidth, int $originalHeight, int $boxWidth, int $boxHeight, Anchor $anchor = Anchor::Center): array
+    public function coverRegion(int $originalWidth, int $originalHeight, int $boxWidth, int $boxHeight, Anchor $anchor = Anchor::Center, ?FocalPoint $focal = null): array
     {
         $ratio = $boxWidth / $boxHeight;
 
@@ -44,12 +46,29 @@ final class SizeGeometry
             $height = (int) round($originalWidth / $ratio);
         }
 
+        if ($focal instanceof FocalPoint) {
+            return [
+                'x' => $this->centredOn($focal->x, $originalWidth, $width),
+                'y' => $this->centredOn($focal->y, $originalHeight, $height),
+                'width' => $width,
+                'height' => $height,
+            ];
+        }
+
         return [
             'x' => $this->placed($originalWidth - $width, $anchor->horizontal()),
             'y' => $this->placed($originalHeight - $height, $anchor->vertical()),
             'width' => $width,
             'height' => $height,
         ];
+    }
+
+    /**
+     * Where a region of `$length` pixels starts to be centred on a fraction of an axis, without leaving the image.
+     */
+    private function centredOn(float $fraction, int $axis, int $length): int
+    {
+        return max(0, min($axis - $length, (int) round($fraction * $axis - $length / 2)));
     }
 
     /**

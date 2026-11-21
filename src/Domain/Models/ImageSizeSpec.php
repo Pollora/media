@@ -31,6 +31,7 @@ final readonly class ImageSizeSpec
         public bool $eager = false,
         public array $widths = [],
         public Anchor $anchor = Anchor::Center,
+        public ?FocalPoint $focal = null,
     ) {
         if ($width === null && $height === null) {
             throw new InvalidArgumentException(sprintf('The size "%s" needs a width, a height, or both.', $name));
@@ -47,6 +48,10 @@ final readonly class ImageSizeSpec
         if ($anchor !== Anchor::Center && $fit !== Fit::Cover) {
             throw new InvalidArgumentException(sprintf('The size "%s" is a %s: an anchor only means something for a cover.', $name, $fit->value));
         }
+
+        if ($focal instanceof FocalPoint && $fit !== Fit::Cover) {
+            throw new InvalidArgumentException(sprintf('The size "%s" is a %s: a focal point only means something for a cover.', $name, $fit->value));
+        }
     }
 
     /**
@@ -61,7 +66,27 @@ final readonly class ImageSizeSpec
             $parts[] = $this->anchor->value;
         }
 
+        // Left out when there is none, for the same reason: a size of an image without a focal point keeps its name.
+        if ($this->focal instanceof FocalPoint) {
+            $parts[] = 'focal:'.$this->focal->fingerprint();
+        }
+
         return implode('|', $parts);
+    }
+
+    /**
+     * The size as it applies to one image: a cover crops around the focal point of the image instead of by the
+     * anchor, and its files take the point in their name and signature, so moving the point never leaves a stale
+     * copy. A size that does not crop (scale, contain) is returned as it is: a focal point never changes its
+     * dimensions nor its name.
+     */
+    public function focusedOn(?FocalPoint $focal): self
+    {
+        if ($this->fit !== Fit::Cover || ! $focal instanceof FocalPoint) {
+            return $this;
+        }
+
+        return new self($this->name, $this->fit, $this->width, $this->height, $this->format, $this->quality, $this->upscale, $this->eager, $this->widths, $this->anchor, $focal);
     }
 
     /**

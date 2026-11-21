@@ -6,6 +6,7 @@ namespace Pollora\Media\Domain\Services;
 
 use Closure;
 use Pollora\Media\Domain\Enums\OutputFormat;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 
 /**
@@ -15,12 +16,16 @@ use Pollora\Media\Domain\Models\ImageSizeSpec;
  * cut to 12 characters. It protects (only a URL the site produced is a name it
  * would generate) and it fingerprints: changing a size changes its name, so a
  * cache never holds a stale file.
+ *
+ * A cover made around the focal point of an image says it: `photo-card-600x400-f0250_0750-{signature}.webp`
+ * (thousandths from the left and from the top). The point is in the signature too, so a name is only valid
+ * with the point it states, and the file of a request is made from the name alone, with no lookup.
  */
 final readonly class SizedFileName
 {
     private const int SIGNATURE_LENGTH = 12;
 
-    private const string PATTERN = '#^(?:(?<directory>.*)/)?(?<stem>.+?)-(?<name>[a-z0-9_]+(?:-\d+w)?)-(?<width>\d+)x(?<height>\d+)-(?<signature>[0-9a-f]{12})\.(?<extension>[a-z0-9]+)$#D';
+    private const string PATTERN = '#^(?:(?<directory>.*)/)?(?<stem>.+?)-(?<name>[a-z0-9_]+(?:-\d+w)?)-(?<width>\d+)x(?<height>\d+)(?:-f(?<fx>\d{4})_(?<fy>\d{4}))?-(?<signature>[0-9a-f]{12})\.(?<extension>[a-z0-9]+)$#D';
 
     /**
      * @param  Closure(): string  $key  The secret the signature is made with: the application key, or a WordPress salt
@@ -42,12 +47,13 @@ final readonly class SizedFileName
         };
 
         return sprintf(
-            '%s%s-%s-%dx%d-%s.%s',
+            '%s%s-%s-%dx%d%s-%s.%s',
             $directory,
             $info['filename'],
             $spec->name,
             $width,
             $height,
+            $spec->focal instanceof FocalPoint ? '-'.$spec->focal->token() : '',
             $this->signature($originalKey, $spec),
             $extension,
         );
@@ -59,12 +65,22 @@ final readonly class SizedFileName
     }
 
     /**
-     * @return array{directory: string, stem: string, name: string, width: int, height: int, signature: string, extension: string}|null
+     * @return array{directory: string, stem: string, name: string, width: int, height: int, focal: FocalPoint|null, signature: string, extension: string}|null
      */
     public function parse(string $file): ?array
     {
         if (preg_match(self::PATTERN, $file, $match) !== 1) {
             return null;
+        }
+
+        $focal = null;
+
+        if ($match['fx'] !== '') {
+            $focal = FocalPoint::fromThousandths((int) $match['fx'], (int) $match['fy']);
+
+            if (! $focal instanceof FocalPoint) {
+                return null;
+            }
         }
 
         return [
@@ -73,6 +89,7 @@ final readonly class SizedFileName
             'name' => $match['name'],
             'width' => (int) $match['width'],
             'height' => (int) $match['height'],
+            'focal' => $focal,
             'signature' => $match['signature'],
             'extension' => $match['extension'],
         ];

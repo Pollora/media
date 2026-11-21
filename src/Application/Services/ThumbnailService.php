@@ -9,7 +9,9 @@ use Pollora\Media\Domain\Contracts\GenerationLock;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\LockHandle;
 use Pollora\Media\Domain\Contracts\MediaStorage;
+use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Services\SizeGeometry;
 use Throwable;
@@ -66,6 +68,12 @@ final readonly class ThumbnailService
             return ThumbnailResult::notFound();
         }
 
+        // The point of a name is part of its signature, so it cannot be forged; but only a cover is made around one.
+        if ($parsed['focal'] instanceof FocalPoint && $spec->fit !== Fit::Cover) {
+            return ThumbnailResult::notFound();
+        }
+
+        $spec = $spec->focusedOn($parsed['focal']);
         $original = $this->originalFor($parsed, $spec);
 
         if ($original === null) {
@@ -80,7 +88,7 @@ final readonly class ThumbnailService
     }
 
     /**
-     * @param  array{directory: string, stem: string, name: string, width: int, height: int, signature: string, extension: string}  $parsed
+     * @param  array{directory: string, stem: string, name: string, width: int, height: int, focal: FocalPoint|null, signature: string, extension: string}  $parsed
      */
     private function produce(string $key, string $original, array $parsed, ImageSizeSpec $spec): ThumbnailResult
     {
@@ -120,7 +128,7 @@ final readonly class ThumbnailService
     }
 
     /**
-     * @param  array{directory: string, stem: string, name: string, width: int, height: int, signature: string, extension: string}  $parsed
+     * @param  array{directory: string, stem: string, name: string, width: int, height: int, focal: FocalPoint|null, signature: string, extension: string}  $parsed
      */
     private function make(string $key, string $original, array $parsed, ImageSizeSpec $spec): ThumbnailResult
     {
@@ -157,7 +165,7 @@ final readonly class ThumbnailService
      * The size already made that stands in for the one that cannot be made now: the smallest that is at least as wide,
      * else the widest there is, else the original. It is not kept in any cache.
      *
-     * @param  array{directory: string, stem: string, name: string, width: int, height: int, signature: string, extension: string}  $parsed
+     * @param  array{directory: string, stem: string, name: string, width: int, height: int, focal: FocalPoint|null, signature: string, extension: string}  $parsed
      */
     private function nearest(string $original, array $parsed): ThumbnailResult
     {
@@ -171,7 +179,7 @@ final readonly class ThumbnailService
 
             $name = basename($entry['path']);
 
-            if (preg_match('/^'.preg_quote($parsed['stem'], '/').'-(?:[a-z0-9_]+-)?(\d+)x(\d+)(?:-[0-9a-f]{12})?\.(jpe?g|png|webp|avif)$/D', $name, $match) === 1) {
+            if (preg_match('/^'.preg_quote($parsed['stem'], '/').'-(?:[a-z0-9_]+-)?(\d+)x(\d+)(?:-f\d{4}_\d{4})?(?:-[0-9a-f]{12})?\.(jpe?g|png|webp|avif)$/D', $name, $match) === 1) {
                 $candidates[$entry['path']] = (int) $match[1];
             }
         }
@@ -186,7 +194,7 @@ final readonly class ThumbnailService
     /**
      * The original this name is of: the one, among the extensions an original can have, whose signature is the name's.
      *
-     * @param  array{directory: string, stem: string, name: string, width: int, height: int, signature: string, extension: string}  $parsed
+     * @param  array{directory: string, stem: string, name: string, width: int, height: int, focal: FocalPoint|null, signature: string, extension: string}  $parsed
      */
     private function originalFor(array $parsed, ImageSizeSpec $spec): ?string
     {

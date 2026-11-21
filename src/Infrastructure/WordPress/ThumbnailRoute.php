@@ -15,7 +15,7 @@ use Pollora\Media\Domain\Models\MediaConfig;
  */
 final readonly class ThumbnailRoute
 {
-    private const string SIZED = '/-[a-z0-9_]+(?:-\d+w)?-\d+x\d+-[0-9a-f]{12}\.(?:webp|avif|jpe?g|png)$/iD';
+    private const string SIZED = '/-[a-z0-9_]+(?:-\d+w)?-\d+x\d+(?:-f\d{4}_\d{4})?-[0-9a-f]{12}\.(?:webp|avif|jpe?g|png)$/iD';
 
     public function __construct(
         private ThumbnailService $service,
