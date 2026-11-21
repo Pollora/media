@@ -40,6 +40,7 @@ it('forgets every declaration on reset', function (): void {
 
 it('registers the wrapper and the hooks of the media on a disk it is given', function (): void {
     Functions\when('wp_salt')->justReturn('salt');
+    Functions\when('register_post_meta')->justReturn(true);
     Filters\expectAdded('upload_dir')->once();
 
     $disk = new TemporaryStorage;

@@ -9,6 +9,8 @@ use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Contracts\ThumbnailDriver;
+use Pollora\Media\Domain\Enums\Fit;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\SizeGeometry;
@@ -32,6 +34,12 @@ final class DeclaredSizes
 
     private readonly ThumbnailDriver $driver;
 
+    /** What serves a media that has a focal point when the configured driver is a service that cannot: the files of the module */
+    private readonly ThumbnailDriver $focalDriver;
+
+    /** @var array<int, list<string>> Files made around the focal point of a media about to change it */
+    private array $focalFiles = [];
+
     /**
      * @param  (Closure(int): bool)|null  $isPrivate  Whether an attachment is private: a private media never goes to a service that makes the sizes
      */
@@ -42,9 +50,11 @@ final class DeclaredSizes
         private readonly ImageProcessor $processor,
         ?ThumbnailDriver $driver = null,
         private readonly ?Closure $isPrivate = null,
+        private readonly ?FocalPoints $focalPoints = null,
     ) {
         $this->geometry = new SizeGeometry;
         $this->driver = $driver ?? new PolloraThumbnailDriver($sizes->names(), $config);
+        $this->focalDriver = $this->driver->makesFiles() ? $this->driver : new PolloraThumbnailDriver($sizes->names(), $config);
     }
 
     public function register(): void
@@ -54,6 +64,85 @@ final class DeclaredSizes
         \add_filter('wp_update_attachment_metadata', [$this, 'remake'], 20, 2);
         \add_filter('image_downsize', [$this, 'downsize'], 10, 3);
         \add_filter('wp_calculate_image_srcset', [$this, 'srcset'], 5, 5);
+
+        if ($this->focalPoints instanceof FocalPoints) {
+            \add_action('update_post_meta', [$this, 'focalWillChange'], 10, 3);
+            \add_action('delete_post_meta', [$this, 'focalWillChange'], 10, 3);
+            \add_action('added_post_meta', [$this, 'focalChanged'], 10, 3);
+            \add_action('updated_post_meta', [$this, 'focalChanged'], 10, 3);
+            \add_action('deleted_post_meta', [$this, 'focalChanged'], 10, 3);
+        }
+    }
+
+    /**
+     * The focal point of a media, which the crops of its covers follow.
+     */
+    public function focalOf(int $attachmentId): ?FocalPoint
+    {
+        return $this->focalPoints?->for($attachmentId);
+    }
+
+    /**
+     * The focal point the sizes of a media follow: none for a private media that a service would make, which keeps
+     * the media from the service and cannot be given a file the module may not make on demand for it.
+     */
+    private function focalForSizes(int $attachmentId): ?FocalPoint
+    {
+        return $this->isKeptFromService($attachmentId, $this->driver) ? null : $this->focalOf($attachmentId);
+    }
+
+    /**
+     * Notes the files made around the focal point of a media, just before the point is changed or removed.
+     */
+    public function focalWillChange(mixed $metaId, mixed $attachmentId, mixed $metaKey): void
+    {
+        if ($metaKey !== FocalPoints::META || ! is_numeric($attachmentId)) {
+            return;
+        }
+
+        $metadata = \wp_get_attachment_metadata((int) $attachmentId);
+        $this->focalFiles[(int) $attachmentId] = is_array($metadata) ? $this->existingFiles($metadata, $this->focalOf((int) $attachmentId), true) : [];
+    }
+
+    /**
+     * A new focal point is new file names: the files of the previous point are deleted (a request for one of
+     * their URLs makes it again, the name saying the point), and the eager sizes are made around the new one.
+     */
+    public function focalChanged(mixed $metaId, mixed $attachmentId, mixed $metaKey): void
+    {
+        if ($metaKey !== FocalPoints::META || ! is_numeric($attachmentId)) {
+            return;
+        }
+
+        $id = (int) $attachmentId;
+        $this->focalPoints?->forget($id);
+        $metadata = \wp_get_attachment_metadata($id);
+        $previous = $this->focalFiles[$id] ?? [];
+        unset($this->focalFiles[$id]);
+
+        if (! is_array($metadata) || ! $this->isMakeable($metadata)) {
+            return;
+        }
+
+        $current = $this->existingFiles($metadata, $this->focalOf($id), true);
+
+        foreach (array_diff($previous, $current) as $file) {
+            try {
+                $this->storage->delete($file);
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        if ($this->sizes->isEmpty()) {
+            return;
+        }
+
+        $remade = $this->withEagerSizes($metadata, $this->focalOf($id));
+
+        if ($remade !== $metadata) {
+            \wp_update_attachment_metadata($id, $remade);
+        }
     }
 
     /**
@@ -78,7 +167,7 @@ final class DeclaredSizes
             return $metadata;
         }
 
-        return $this->withEagerSizes($metadata);
+        return $this->withEagerSizes($metadata, $this->focalOf($attachmentId));
     }
 
     /**
@@ -102,7 +191,7 @@ final class DeclaredSizes
             return $metadata;
         }
 
-        return $this->withEagerSizes($metadata);
+        return $this->withEagerSizes($metadata, $this->focalOf($attachmentId));
     }
 
     /**
@@ -122,9 +211,10 @@ final class DeclaredSizes
             return false;
         }
 
-        $spec = $this->known()[$size];
+        $spec = $this->known()[$size]->focusedOn($this->focalForSizes($attachmentId));
+        $driver = $this->driverFor($spec);
 
-        if ($this->driver->refusal($spec) !== null || $this->isKeptFromService($attachmentId)) {
+        if ($driver->refusal($spec) !== null || $this->isKeptFromService($attachmentId, $driver)) {
             return false;
         }
 
@@ -134,7 +224,7 @@ final class DeclaredSizes
 
         [$width, $height] = $this->geometry->dimensions($spec, (int) $metadata['width'], (int) $metadata['height']);
 
-        return [$this->driver->url((string) $metadata['file'], $spec, (int) $metadata['width'], (int) $metadata['height']), $width, $height, true];
+        return [$driver->url((string) $metadata['file'], $spec, (int) $metadata['width'], (int) $metadata['height']), $width, $height, true];
     }
 
     /**
@@ -147,15 +237,22 @@ final class DeclaredSizes
      */
     public function srcset(array|false $sources, array $sizeArray, string $imageSrc, array $imageMeta, int $attachmentId): array|false
     {
-        if ($sources === false || ! $this->isImage($imageMeta) || $this->isKeptFromService($attachmentId)) {
+        if ($sources === false || ! $this->isImage($imageMeta)) {
             return $sources;
         }
 
-        $name = $this->driver->sizeOf($imageSrc);
+        $name = $this->driver->sizeOf($imageSrc) ?? $this->focalDriver->sizeOf($imageSrc);
         $spec = $name === null ? null : ($this->known()[$name] ?? null);
         $base = $spec === null ? null : ($this->sizes->get($spec->name) ?? $this->parentOf($spec));
 
         if (! $base instanceof ImageSizeSpec || $base->widths === []) {
+            return $sources;
+        }
+
+        $base = $base->focusedOn($this->focalForSizes($attachmentId));
+        $driver = $this->driverFor($base);
+
+        if ($this->isKeptFromService($attachmentId, $driver)) {
             return $sources;
         }
 
@@ -164,7 +261,7 @@ final class DeclaredSizes
 
         foreach ($candidates as $candidate) {
             [$width] = $this->geometry->dimensions($candidate, (int) $imageMeta['width'], (int) $imageMeta['height']);
-            $built[$width] = ['url' => $this->driver->url((string) $imageMeta['file'], $candidate, (int) $imageMeta['width'], (int) $imageMeta['height']), 'descriptor' => 'w', 'value' => $width];
+            $built[$width] = ['url' => $driver->url((string) $imageMeta['file'], $candidate, (int) $imageMeta['width'], (int) $imageMeta['height']), 'descriptor' => 'w', 'value' => $width];
         }
 
         ksort($built);
@@ -178,11 +275,13 @@ final class DeclaredSizes
      * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>|null The metadata entry of the size, or null when it could not be made
      */
-    public function make(array $metadata, ImageSizeSpec $spec): ?array
+    public function make(array $metadata, ImageSizeSpec $spec, ?FocalPoint $focal = null): ?array
     {
         if ($this->isGif($metadata)) {
             return null;
         }
+
+        $spec = $spec->focusedOn($focal);
 
         $original = (string) $metadata['file'];
         $destination = $this->fileOf($metadata, $spec);
@@ -208,19 +307,23 @@ final class DeclaredSizes
      *
      * @param  array<string, mixed>  $metadata
      */
-    public function fileFor(array $metadata, ImageSizeSpec $spec): string
+    public function fileFor(array $metadata, ImageSizeSpec $spec, ?FocalPoint $focal = null): string
     {
-        return $this->fileOf($metadata, $spec);
+        return $this->fileOf($metadata, $spec->focusedOn($focal));
     }
 
     /**
      * The files of the declared sizes of an original that are on the disk, made at upload or on demand.
      * WordPress does not know the ones made on demand: they follow the media when it is deleted or changes visibility.
      *
+     * A media with a focal point has the files of its covers made around it, and may keep those made before the
+     * point was set: both go with it.
+     *
      * @param  array<string, mixed>  $metadata
+     * @param  bool  $onlyFocal  Only the files of the covers made around the focal point
      * @return list<string>
      */
-    public function existingFiles(array $metadata): array
+    public function existingFiles(array $metadata, ?FocalPoint $focal = null, bool $onlyFocal = false): array
     {
         if ($this->sizes->isEmpty() || ! $this->isMakeable($metadata)) {
             return [];
@@ -229,18 +332,25 @@ final class DeclaredSizes
         $files = [];
 
         foreach ($this->known() as $spec) {
-            $file = $this->fileOf($metadata, $spec);
+            $focused = $spec->focusedOn($focal);
+            $candidates = $focused->focal instanceof FocalPoint ? [$this->fileOf($metadata, $focused)] : [];
 
-            try {
-                if ($this->storage->exists($file)) {
-                    $files[] = $file;
+            if (! $onlyFocal) {
+                $candidates[] = $this->fileOf($metadata, $spec);
+            }
+
+            foreach ($candidates as $file) {
+                try {
+                    if ($this->storage->exists($file)) {
+                        $files[] = $file;
+                    }
+                } catch (Throwable) {
+                    continue;
                 }
-            } catch (Throwable) {
-                continue;
             }
         }
 
-        return $files;
+        return array_values(array_unique($files));
     }
 
     /**
@@ -265,14 +375,14 @@ final class DeclaredSizes
      * @param  array<string, mixed>  $metadata
      * @return array<string, mixed>
      */
-    private function withEagerSizes(array $metadata): array
+    private function withEagerSizes(array $metadata, ?FocalPoint $focal = null): array
     {
         foreach ($this->known() as $spec) {
-            if (! $spec->eager || ! $this->driver->makesFiles()) {
+            if (! $spec->eager || ! $this->driverFor($spec->focusedOn($focal))->makesFiles()) {
                 continue;
             }
 
-            $entry = $this->make($metadata, $spec);
+            $entry = $this->make($metadata, $spec, $focal);
 
             if ($entry !== null) {
                 $metadata['sizes'][$spec->name] = $entry;
@@ -294,9 +404,19 @@ final class DeclaredSizes
      * Whether the sizes of this media must not be asked of a service that makes them: a private media
      * would be fetched, and served, by a service that has no notion of who may see it.
      */
-    private function isKeptFromService(int $attachmentId): bool
+    private function isKeptFromService(int $attachmentId, ThumbnailDriver $driver): bool
     {
-        return ! $this->driver->makesFiles() && $this->isPrivate instanceof Closure && ($this->isPrivate)($attachmentId);
+        return ! $driver->makesFiles() && $this->isPrivate instanceof Closure && ($this->isPrivate)($attachmentId);
+    }
+
+    /**
+     * What serves a size of an image: the configured driver, except for a cover around a focal point. A focal point is
+     * per image, so it cannot live in an imgproxy preset or a Bunny class, which are meant to be the only way to
+     * transform the images: that crop is a file of the module, made on demand, whatever the driver.
+     */
+    private function driverFor(ImageSizeSpec $spec): ThumbnailDriver
+    {
+        return $spec->fit === Fit::Cover && $spec->focal instanceof FocalPoint ? $this->focalDriver : $this->driver;
     }
 
     private function parentOf(ImageSizeSpec $variant): ?ImageSizeSpec

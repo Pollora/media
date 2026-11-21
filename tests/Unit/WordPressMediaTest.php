@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 use Pollora\Media\Application\Services\ImageSizes;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Infrastructure\WordPress\StreamWrapper;
@@ -12,6 +13,8 @@ use Pollora\Media\Infrastructure\WordPress\WordPressMedia;
 use Pollora\Media\Tests\Fixtures\TemporaryStorage;
 
 beforeEach(function (): void {
+    Functions\when('register_post_meta')->justReturn(true);
+    Functions\when('get_post_meta')->justReturn('');
     $this->disk = new TemporaryStorage;
     $this->config = new MediaConfig('https://media.client.fr', ['https://old.test/content/uploads']);
     $this->media = new WordPressMedia($this->disk->storage, $this->config);
@@ -119,6 +122,23 @@ it('deletes the files a plugin declared with the media, besides those WordPress 
         ->and(file_exists($this->disk->root.'/2026/keep.jpg'))->toBeTrue();
 });
 
+it('deletes the sizes made around the focal point of a media with it', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('card')->cover(600, 400);
+    $media = new WordPressMedia($this->disk->storage, $this->config, null, $sizes);
+    $meta = ['file' => '2026/10/photo.jpg', 'width' => 3000, 'height' => 2000];
+    $around = $sizes->names()->for('2026/10/photo.jpg', $sizes->get('card')->focusedOn(new FocalPoint(0.25, 0.75)), 3000, 2000);
+    mkdir($this->disk->root.'/2026/10', 0777, true);
+    $this->disk->storage->write($around, 'made on demand');
+    Functions\when('wp_get_attachment_metadata')->justReturn($meta);
+    Functions\when('get_post_meta')->justReturn(['x' => 0.25, 'y' => 0.75]);
+
+    $media->deleteAttachment(9);
+
+    expect($this->disk->storage->exists($around))->toBeFalse()
+        ->and($media->focalPoints()->for(9)?->token())->toBe('f0250_0750');
+});
+
 it('adds a dns-prefetch for the media domain when it differs from the site, and only then', function (): void {
     Functions\when('home_url')->justReturn('https://site.test');
 
@@ -163,9 +183,9 @@ it('answers a missing size on its own route with the default driver', function (
     $this->media->register();
 });
 
-it('registers no fallback route when a service makes the sizes', function (ThumbnailDriverSettings $settings): void {
+it('still registers the route when a service makes the sizes: a cover around a focal point is a file of the module', function (ThumbnailDriverSettings $settings): void {
     $media = new WordPressMedia($this->disk->storage, $this->config, thumbnails: $settings);
-    Brain\Monkey\Actions\expectAdded('parse_request')->never();
+    Brain\Monkey\Actions\expectAdded('parse_request')->once();
 
     $media->register();
 
