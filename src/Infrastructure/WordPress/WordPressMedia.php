@@ -13,6 +13,7 @@ use Pollora\Media\Application\Services\ThumbnailService;
 use Pollora\Media\Domain\Contracts\ImageProcessor;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Contracts\ThumbnailDriver;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Domain\Services\LegacyUrlRewriter;
@@ -38,6 +39,8 @@ final class WordPressMedia
 
     private readonly DeclaredSizes $declared;
 
+    private readonly FocalPoints $focalPoints;
+
     private readonly ImageProcessor $processor;
 
     private readonly ThumbnailDriver $driver;
@@ -60,7 +63,8 @@ final class WordPressMedia
         $this->sizes = $sizes ?? ImageSize::registry();
         $this->processor = $processor ?? new WordPressImageProcessor;
         $this->driver = ThumbnailDrivers::make($this->thumbnails, $this->sizes, $config);
-        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor, $this->driver, $this->isPrivateAttachment(...));
+        $this->focalPoints = new FocalPoints;
+        $this->declared = new DeclaredSizes($this->sizes, $config, $storage, $this->processor, $this->driver, $this->isPrivateAttachment(...), $this->focalPoints);
         $this->exporter = new ThumbnailExporter(
             $this->sizes,
             $this->thumbnails,
@@ -68,7 +72,7 @@ final class WordPressMedia
             $config,
             $this->thumbnails->bunnyApiKey === null ? null : new WordPressBunnyPullZone($this->thumbnails->bunnyApiKey),
         );
-        $this->files = new AttachmentFiles(fn (array $metadata): array => $this->declared->existingFiles($metadata));
+        $this->files = new AttachmentFiles(fn (array $metadata, int $attachmentId): array => $this->declared->existingFiles($metadata, $this->focalPoints->for($attachmentId)));
         $this->private = new PrivateMedia($storage, $config, $this->files);
     }
 
@@ -84,11 +88,11 @@ final class WordPressMedia
         \add_action('delete_attachment', [$this, 'deleteAttachment'], 10, 1);
         \add_action('deleted_post', [$this, 'deletedPost'], 10, 2);
         $this->private->register();
+        $this->focalPoints->register();
         $this->declared->register();
 
-        if ($this->driver->makesFiles()) {
-            (new ThumbnailRoute($this->thumbnailService(), $this->config))->register();
-        }
+        // Also with a service driver (imgproxy, Bunny): a cover around a focal point is a file of the module, made on demand.
+        (new ThumbnailRoute($this->thumbnailService(), $this->config))->register();
 
         if (defined('WP_CLI') && WP_CLI && class_exists(\WP_CLI::class)) {
             \WP_CLI::add_command('pollora media', new MediaCommand(
@@ -101,7 +105,7 @@ final class WordPressMedia
             ));
             \WP_CLI::add_command('pollora media thumbs', new ThumbsCommand(
                 new SizeWarmer($this->declared, $this->storage),
-                new SizePruner($this->storage, $this->sizes),
+                new SizePruner($this->storage, $this->sizes, fn (string $original): ?FocalPoint => $this->focalPoints->byFile()[$original] ?? null),
                 $this->driver,
                 $this->exporter,
             ));
@@ -169,7 +173,7 @@ final class WordPressMedia
         $metadata = \wp_get_attachment_metadata($attachmentId);
 
         // The sizes made on demand are not in the metadata of WordPress: they go with the media.
-        foreach (is_array($metadata) ? $this->declared->existingFiles($metadata) : [] as $file) {
+        foreach (is_array($metadata) ? $this->declared->existingFiles($metadata, $this->focalPoints->for($attachmentId)) : [] as $file) {
             try {
                 $this->storage->delete($file);
             } catch (Throwable) {
@@ -214,6 +218,11 @@ final class WordPressMedia
             $this->limits,
             $this->private->isPrivateFile(...),
         );
+    }
+
+    public function focalPoints(): FocalPoints
+    {
+        return $this->focalPoints;
     }
 
     public function declaredSizes(): DeclaredSizes

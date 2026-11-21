@@ -15,7 +15,7 @@ use Pollora\Media\Domain\Services\SizeGeometry;
  */
 final class FakeImageProcessor implements ImageProcessor
 {
-    /** @var list<array{source: string, destination: string, size: string}> */
+    /** @var list<array{source: string, destination: string, size: string, focal: string|null}> */
     public array $made = [];
 
     public function __construct(private readonly MediaStorage $storage, private readonly ?string $failing = null) {}
@@ -28,7 +28,7 @@ final class FakeImageProcessor implements ImageProcessor
 
         [$width, $height] = (new SizeGeometry)->dimensions($spec, $originalWidth, $originalHeight);
         $this->storage->write($destinationKey, 'image '.$width.'x'.$height);
-        $this->made[] = ['source' => $sourceKey, 'destination' => $destinationKey, 'size' => $spec->name];
+        $this->made[] = ['source' => $sourceKey, 'destination' => $destinationKey, 'size' => $spec->name, 'focal' => $spec->focal?->fingerprint()];
 
         return ['width' => $width, 'height' => $height, 'mime' => 'image/webp', 'filesize' => 12];
     }

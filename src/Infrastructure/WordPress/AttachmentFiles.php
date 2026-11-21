@@ -12,7 +12,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 final class AttachmentFiles
 {
     /**
-     * @param  (\Closure(array<string, mixed>): list<string>)|null  $declared  The files of the declared sizes that exist for an original
+     * @param  (\Closure(array<string, mixed>, int): list<string>)|null  $declared  The files of the declared sizes that exist for an original, with its metadata and its id
      */
     public function __construct(private readonly ?\Closure $declared = null) {}
 
@@ -46,7 +46,7 @@ final class AttachmentFiles
         }
 
         if ($this->declared instanceof \Closure) {
-            $files = [...$files, ...($this->declared)($metadata)];
+            $files = [...$files, ...($this->declared)($metadata, $attachmentId)];
         }
 
         return $this->declaredBy($attachmentId, array_values(array_unique($files)));

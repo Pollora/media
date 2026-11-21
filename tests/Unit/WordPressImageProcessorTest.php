@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Brain\Monkey\Functions;
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Exceptions\ImageProcessingFailedException;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Infrastructure\WordPress\StreamWrapper;
 use Pollora\Media\Infrastructure\WordPress\WordPressImageProcessor;
@@ -79,6 +80,15 @@ it('crops a cover size from the region the geometry gives, writes it in the form
         ->and($this->editor->calls[1][0])->toBe('crop')
         ->and($this->editor->calls[2])->toBe(['save', 'pollora://uploads/2026/10/photo-card.webp', 'image/webp'])
         ->and($this->disk->storage->exists('2026/10/photo-card.webp'))->toBeTrue();
+});
+
+it('crops a cover around the focal point of the image instead of by its anchor', function (): void {
+    $this->sizes->add('card')->cover(600, 400)->webp(75);
+    $spec = $this->sizes->get('card')->focusedOn(new FocalPoint(0.7, 0.5));
+
+    (new WordPressImageProcessor)->make('2026/10/photo.jpg', '2026/10/photo-card.webp', $spec, 3000, 1000);
+
+    expect($this->editor->calls[1])->toBe(['crop', 1350, 0, 1500, 1000, 600, 400]);
 });
 
 it('keeps the format of the original when the size asks for it', function (): void {

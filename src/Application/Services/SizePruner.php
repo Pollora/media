@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Application\Services;
 
+use Closure;
 use Pollora\Media\Domain\Contracts\MediaStorage;
+use Pollora\Media\Domain\Models\FocalPoint;
 
 /**
  * Finds, and deletes, the sized files that no declared size stands for any more:
- * a size that was changed (its signature moved on) or removed.
+ * a size that was changed (its signature moved on) or removed, or a crop around a focal point that was moved.
  *
  * Only a file named the way the module names its sizes, next to an original that is
  * still there, is a candidate: whatever WordPress or a plugin made is left alone.
@@ -17,9 +19,13 @@ final readonly class SizePruner
 {
     private const array ORIGINAL_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'];
 
+    /**
+     * @param  (Closure(string): ?FocalPoint)|null  $focalOf  The focal point of an original, by path. Without it, a file made around a point is never stale for its point alone
+     */
     public function __construct(
         private MediaStorage $storage,
         private ImageSizes $sizes,
+        private ?Closure $focalOf = null,
     ) {}
 
     /**
@@ -53,7 +59,7 @@ final readonly class SizePruner
 
             $spec = $declared[$parsed['name']] ?? null;
 
-            if ($spec === null || ! hash_equals($this->sizes->names()->signature($original, $spec), $parsed['signature'])) {
+            if ($spec === null || ! hash_equals($this->sizes->names()->signature($original, $spec->focusedOn($parsed['focal'])), $parsed['signature']) || $this->movedOn($original, $parsed['focal'])) {
                 $stale[] = (string) $path;
             }
         }
@@ -80,7 +86,15 @@ final readonly class SizePruner
     }
 
     /**
-     * @param  array{directory: string, stem: string, name: string, width: int, height: int, signature: string, extension: string}  $parsed
+     * Whether a file was made around a focal point that is not the one of its image any more: the point was moved or removed.
+     */
+    private function movedOn(string $original, ?FocalPoint $made): bool
+    {
+        return $made instanceof FocalPoint && $this->focalOf instanceof Closure && ! $made->equals(($this->focalOf)($original));
+    }
+
+    /**
+     * @param  array{directory: string, stem: string, name: string, width: int, height: int, focal: FocalPoint|null, signature: string, extension: string}  $parsed
      * @param  array<int|string, int>  $paths
      */
     private function originalOf(array $parsed, array $paths): ?string

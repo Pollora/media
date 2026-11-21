@@ -124,6 +124,25 @@ ImageSize::add('portrait')->cover(400, 500, Anchor::Top);   // use Pollora\Media
 
 **Where a cover crops.** A `cover()` keeps the center of the image. The `Anchor` argument keeps another part, the nine positions of `add_image_size()`: `Center` (default), `Top`, `Bottom`, `Left`, `Right`, `TopLeft`, `TopRight`, `BottomLeft`, `BottomRight`. It is only meaningful for a cover (any other fit refuses it), it never changes the dimensions of the size, and it is part of the signature: changing it changes the name of the files and the `v` of a service URL, so no cache keeps the old crop. With `imgproxy` it becomes a `gravity` in the preset. **Bunny** refuses a size anchored away from the center, as it does a class name that does not fit (`thumbs export` and `pollora:doctor` say so): no parameter of a class is known to move the crop it makes to a ratio, and the size would be served centered under a URL that promises another crop.
 
+**A focal point per image.** An anchor is chosen once, by the developer; the editor knows, image by image, what must survive a crop. The focal point of an image is its post meta `_pollora_focal_point`, `{x, y}` as fractions of the original from 0 to 1 (0.25, 0.75 is a quarter from the left and three quarters from the top), so it survives a resize of the original. The module declares it with `register_post_meta()` with a schema, so the REST API (the block editor, a headless front-end) reads and writes it for a user who can edit the attachment. Anything that is not a point (a coordinate out of range, a missing axis) is no point: a bad value never reaches a crop. A coordinate is kept to a thousandth.
+
+```php
+$points = $media->focalPoints();     // the WordPressMedia returned by Media::register()
+$points->set($attachmentId, 0.8, 0.35);
+$points->for($attachmentId);         // ?FocalPoint, with ->x and ->y
+$points->clear($attachmentId);
+
+add_filter('pollora/media/focal_point', fn (?array $point, int $id) => $id === 12 ? ['x' => 0.5, 'y' => 0.2] : $point, 10, 2);
+```
+
+The `pollora/media/focal_point` filter has the last word: it receives `['x' => ..., 'y' => ...]` or `null` and returns the same shape (`null` for no point); an answer that is not a point is ignored. With a focal point, a `cover()` keeps the region centred on it, clamped to the edges of the image, instead of the anchor of the size. A size that does not crop (`scale()`, `contain()`) and the `widths()` variants of a scale never change: a focal point never changes the dimensions, the `srcset` or the name of a size.
+
+The point is part of what is signed for that image: the file of a cover around it is `photo-card-600x400-f0250_0750-{signature}.webp` (thousandths from the left and from the top), so moving the point gives new file names and no CDN keeps the old crop, and a URL is only valid with the point it states. Changing or removing the point deletes the files made around the previous one (a request for one of their URLs makes it again), and makes the `eager()` covers around the new one; the files made before the point was set stay, since a post may link them. `thumbs prune` also removes the crops around a point that is not the image's any more. The files go with the media when it is deleted.
+
+**Focal points and services.** A focal point is per image, so it cannot live in an imgproxy preset or a Bunny class, which are meant to be the only way to transform the images (`IMGPROXY_ONLY_PRESETS`, *Force Transformation Classes*). A cover of an image that has a focal point is therefore made by the module, a file of the library made on demand, whatever the configured driver; the other sizes of that image, and every size of an image with no point, keep going to the service. The fallback route is registered for it with imgproxy and Bunny too. A private media is not concerned: it never goes to a service, and its covers are the module's as for any media.
+
+The editor of WordPress's own sizes (`add_image_size()` with `crop`) is not changed. There is no screen to place the point yet: write the meta (REST, `set()`, WP-CLI `wp post meta update <id> _pollora_focal_point '{"x":0.25,"y":0.75}' --format=json`).
+
 A size is used by its name, as any WordPress size: `wp_get_attachment_image($id, 'card')`, `the_post_thumbnail('hero')`, `wp_get_attachment_image_src()`.
 
 **The URL of a size is worked out, never read.** It comes from the metadata of the original (its file, width and height), whether the file of the size exists or not: `photo-card-600x400-{signature}.webp`. The signature is an HMAC of the original and of the parameters of the size, cut to 12 characters (the application key in Pollora, a salt of WordPress otherwise): changing a size changes its name, so no cache holds a stale file. The `width`, `height` and `srcset` WordPress writes come from the same computation, with no call to the disk.

@@ -4,6 +4,7 @@
         "hook:pollora/media/attachment_files": "hook",
         "hook:pollora/media/deleted": "hook",
         "hook:pollora/media/filesystem": "hook",
+        "hook:pollora/media/focal_point": "hook",
         "hook:pollora/media/generate_subsizes": "hook",
         "hook:pollora/media/is_private": "hook",
         "hook:pollora/media/signed_url": "hook",

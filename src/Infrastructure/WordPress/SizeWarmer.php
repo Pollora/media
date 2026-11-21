@@ -76,14 +76,15 @@ final readonly class SizeWarmer
         }
 
         $report['checked']++;
+        $focal = $this->declared->focalOf($id);
         $changed = false;
 
         foreach ($specs as $spec) {
-            if ($this->storage->exists($this->declared->fileFor($metadata, $spec))) {
+            if ($this->storage->exists($this->declared->fileFor($metadata, $spec, $focal))) {
                 continue;
             }
 
-            $entry = $this->declared->make($metadata, $spec);
+            $entry = $this->declared->make($metadata, $spec, $focal);
 
             if ($entry === null) {
                 $report['failed']++;

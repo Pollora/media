@@ -50,6 +50,11 @@ it('takes the path of the library out of the URL path, whatever the query string
         ->and($this->route->keyOf('/2026/10/photo-card-600x400-0123456789ab.webp'))->toBe('2026/10/photo-card-600x400-0123456789ab.webp');
 });
 
+it('takes a cover around a focal point for a size, its name saying the point', function (): void {
+    expect($this->route->keyOf('/content/uploads/2026/10/photo-card-600x400-f0250_0750-0123456789ab.webp'))->toBe('2026/10/photo-card-600x400-f0250_0750-0123456789ab.webp')
+        ->and($this->route->keyOf('/content/uploads/2026/10/photo-card-600x400-f25_75-0123456789ab.webp'))->toBeNull();
+});
+
 it('does not look at a request that is not a size: a page, an asset, a plain image', function (string $path): void {
     expect($this->route->keyOf($path))->toBeNull();
 })->with([
