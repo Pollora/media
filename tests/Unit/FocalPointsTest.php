@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Brain\Monkey\Actions;
 use Brain\Monkey\Filters;
 use Brain\Monkey\Functions;
 use Pollora\Media\Domain\Models\FocalPoint;
@@ -19,6 +20,7 @@ beforeEach(function (): void {
 });
 
 it('declares the meta of the attachment, for the REST API, with a schema that bounds both coordinates', function (): void {
+    Functions\when('did_action')->justReturn(1);
     $args = null;
     Functions\expect('register_post_meta')->once()->andReturnUsing(function (string $type, string $key, array $arguments) use (&$args): bool {
         $args = [$type, $key, $arguments];
@@ -43,6 +45,7 @@ it('declares the meta of the attachment, for the REST API, with a schema that bo
 });
 
 it('lets only a user who can edit the attachment write the meta over REST', function (bool $can): void {
+    Functions\when('did_action')->justReturn(1);
     $callback = null;
     Functions\when('register_post_meta')->alias(function (string $type, string $key, array $arguments) use (&$callback): bool {
         $callback = $arguments['auth_callback'];
@@ -55,6 +58,26 @@ it('lets only a user who can edit the attachment write the meta over REST', func
 
     expect($callback(false, '_pollora_focal_point', 42))->toBe($can);
 })->with([true, false]);
+
+it('waits for init to declare the meta, and declares it at once when init has already run', function (): void {
+    $declared = 0;
+    Functions\when('register_post_meta')->alias(function () use (&$declared): bool {
+        $declared++;
+
+        return true;
+    });
+
+    Functions\when('did_action')->justReturn(0);
+    Actions\expectAdded('init')->once();
+    $this->points->register();
+
+    expect($declared)->toBe(0);
+
+    Functions\when('did_action')->justReturn(1);
+    $this->points->register();
+
+    expect($declared)->toBe(1);
+});
 
 it('reads the point of an image, typed, and asks the database once per media', function (): void {
     $this->stored[7]['_pollora_focal_point'] = ['x' => 0.25, 'y' => '0.75'];

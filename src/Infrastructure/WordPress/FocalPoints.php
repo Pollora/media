@@ -27,7 +27,27 @@ final class FocalPoints
     /** @var array<string, FocalPoint>|null */
     private ?array $byFile = null;
 
+    /**
+     * Declares the meta on `init`, where WordPress wants `register_post_meta()` called, or at once when `init` has
+     * already run (a module booted late). Nothing is called while WordPress is not loaded: a Laravel application
+     * that boots the module without WordPress (a test, a console command) has no such function.
+     */
     public function register(): void
+    {
+        if (\function_exists('did_action') && \did_action('init') > 0) {
+            $this->declareMeta();
+
+            return;
+        }
+
+        \add_action('init', [$this, 'declareMeta']);
+    }
+
+    /**
+     * The `register_post_meta()` call, with the schema that makes the point readable and writable over REST. Public
+     * because WordPress calls it from the `init` action.
+     */
+    public function declareMeta(): void
     {
         \register_post_meta('attachment', self::META, [
             'type' => 'object',
