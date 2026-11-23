@@ -10,7 +10,7 @@ if (! function_exists('contractCase')) {
      *
      * `$knownDeviations` maps `'adapter|case'` to the reason the adapter does not honour the case. A listed case is not
      * weakened, it still runs: while it fails the test is reported as skipped with the reason, so the difference stays in
-     * every run; the day it passes the test FAILS and asks for the line to be deleted, so a difference that was fixed
+     * every run, with what it fails with now (a new kind of failure shows); the day it passes the test FAILS and asks for the line to be deleted, so a difference that was fixed
      * cannot hide in the list. An adapter that is not listed fails the contract like any test.
      *
      * @param  array<string, string>  $knownDeviations
@@ -27,7 +27,7 @@ if (! function_exists('contractCase')) {
                 throw $throwable;
             }
 
-            test()->markTestSkipped('KNOWN DEVIATION: '.$reason);
+            test()->markTestSkipped(sprintf('KNOWN DEVIATION: %s [now failing with: %s]', $reason, strtok($throwable->getMessage(), "\n")));
         }
 
         if ($reason !== null) {

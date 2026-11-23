@@ -141,7 +141,10 @@ it('does not recognise the URL of a size it refuses', function (string $adapter,
     $driver = ($this->driverFrom)($make);
 
     if ($driver->refusal($spec) === null) {
-        $this->markTestSkipped('This driver does not refuse the size: nothing to recognise.');
+        // Nothing is refused: the size is served, so the driver gives its URL (the case below is for a driver that refuses).
+        expect($driver->url('2026/10/photo.jpg', $spec, 3000, 2000))->toBeString()->not->toBeEmpty();
+
+        return;
     }
 
     contractCase(THUMBNAIL_KNOWN_DEVIATIONS, $adapter, 'refused size is not recognised', function () use ($driver, $spec): void {
