@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **BREAKING**: `PolloraThumbnailDriver` takes the declared sizes (`ImageSizes`) as a third constructor argument and `ImgproxyThumbnailDriver` as its third, before the base URL (`new ImgproxyThumbnailDriver($signer, $config, $sizes, $baseUrl, $bucket)`), to recognise only declared sizes as `BunnyThumbnailDriver` already does. `ThumbnailDrivers::make()` and `DeclaredSizes` pass them; only code that builds these drivers by hand changes.
 
+||||||| d54194b
+### Security
+
+- A size signature is never made with an empty key (#53). With an empty `app.key` (or a blank salt) the HMAC of a file name was computable by anyone, who could then have the declared sizes made for any original. `SizedFileName` now throws `InvalidMediaConfigurationException::emptySigningKey()` when the key it resolves is empty or blank, with a message that says what to set (`APP_KEY`, or the WordPress salts); the key is still resolved when a signature is made, so a key known late works, and an installation with a key sees no change: the file names and signatures are what they were (the signature stays cut to 12 hexadecimal digits, which a name already issued depends on).
+
 ### Added
 
 - An integration suite (`tests/Integration`, `composer test:integration`) that runs against a real WordPress: the upload directory moved to the wrapper and the public URL, an uploaded image stored with the sizes WordPress and the module make through the real image editors, the URL of a declared size and the file made when it is first asked for, the focal point meta written over REST (an editor only, a point out of range refused) with the covers made around it, the legacy URLs replaced in the content, and the private flag read from the table. It is not part of the default `pest` run; the harness's optional `WordPress integration` job starts it.

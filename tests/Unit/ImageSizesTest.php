@@ -6,6 +6,7 @@ use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
+use Pollora\Media\Domain\Exceptions\InvalidMediaConfigurationException;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Services\SizedFileName;
 
@@ -148,4 +149,23 @@ it('refuses a size name that ends with a newline: the $ of the pattern would let
     expect(array_keys($this->sizes->all()))->toBe(['card'])
         ->and($this->sizes->refusals())->toHaveCount(1)
         ->and($this->sizes->get("card\n"))->toBeNull();
+});
+
+it('refuses to sign a size with an empty key, whatever the way it is asked', function (string $key): void {
+    $name = new SizedFileName(fn (): string => $key);
+    $spec = new ImageSizeSpec('card', Fit::Cover, 600, 400);
+
+    expect(fn (): string => $name->for('a/photo.jpg', $spec, 3000, 2000))->toThrow(InvalidMediaConfigurationException::class, 'APP_KEY')
+        ->and(fn (): string => $name->signature('a/photo.jpg', $spec))->toThrow(InvalidMediaConfigurationException::class);
+})->with(['empty' => [''], 'blank' => ['  ']]);
+
+it('resolves the key when a signature is made, so a key known late still works', function (): void {
+    $key = '';
+    $name = new SizedFileName(function () use (&$key): string {
+        return $key;
+    });
+    $spec = new ImageSizeSpec('card', Fit::Cover, 600, 400);
+    $key = 'late-key';
+
+    expect($name->for('a/photo.jpg', $spec, 3000, 2000))->toMatch('#^a/photo-card-600x400-[0-9a-f]{12}\.webp$#');
 });
