@@ -6,6 +6,7 @@ namespace Pollora\Media\Domain\Services;
 
 use Closure;
 use Pollora\Media\Domain\Enums\OutputFormat;
+use Pollora\Media\Domain\Exceptions\InvalidMediaConfigurationException;
 use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 
@@ -34,6 +35,8 @@ final readonly class SizedFileName
 
     /**
      * @param  string  $originalKey  Path of the original, relative to the library
+     *
+     * @throws InvalidMediaConfigurationException When the signing key is empty
      */
     public function for(string $originalKey, ImageSizeSpec $spec, int $originalWidth, int $originalHeight): string
     {
@@ -59,9 +62,28 @@ final readonly class SizedFileName
         );
     }
 
+    /**
+     * @throws InvalidMediaConfigurationException When the signing key is empty
+     */
     public function signature(string $originalKey, ImageSizeSpec $spec): string
     {
-        return substr(hash_hmac('sha256', $originalKey.'|'.$spec->name.'|'.$spec->fingerprint(), ($this->key)()), 0, self::SIGNATURE_LENGTH);
+        return substr(hash_hmac('sha256', $originalKey.'|'.$spec->name.'|'.$spec->fingerprint(), $this->secret()), 0, self::SIGNATURE_LENGTH);
+    }
+
+    /**
+     * The secret, resolved when a signature is made (the application key may not be known before).
+     *
+     * @throws InvalidMediaConfigurationException When the key is empty: the signature would protect nothing
+     */
+    private function secret(): string
+    {
+        $secret = (string) ($this->key)();
+
+        if (trim($secret) === '') {
+            throw InvalidMediaConfigurationException::emptySigningKey();
+        }
+
+        return $secret;
     }
 
     /**

@@ -31,4 +31,12 @@ final class InvalidMediaConfigurationException extends RuntimeException
     {
         return new self('The S3 driver needs league/flysystem-aws-s3-v3: run "composer require league/flysystem-aws-s3-v3".');
     }
+
+    /**
+     * The key the size signatures are made with is empty, so anyone could compute a signature.
+     */
+    public static function emptySigningKey(): self
+    {
+        return new self('The key the media size signatures are made with is empty, so anyone could compute them. Set APP_KEY (php artisan key:generate) with the framework, or define the WordPress salts (AUTH_KEY and the others) in wp-config.php.');
+    }
 }
