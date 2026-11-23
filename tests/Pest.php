@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 use Brain\Monkey;
 
-require_once __DIR__.'/Fixtures/WpCli.php';
-
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -14,7 +12,8 @@ require_once __DIR__.'/Fixtures/WpCli.php';
 | No framework to boot. WordPress functions are stubbed with Brain Monkey,
 | and Mockery's expectations count as assertions. The storage is a real
 | Flysystem local adapter in a temporary directory: nothing is mocked that
-| the package owns.
+| the package owns. The stand-in for WP-CLI comes from tests/bootstrap.php
+| (the unit suite only).
 |
 */
 
