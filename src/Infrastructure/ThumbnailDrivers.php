@@ -28,19 +28,19 @@ final class ThumbnailDrivers
 
         try {
             return match ($settings->driver) {
-                ThumbnailDriverSettings::POLLORA => new PolloraThumbnailDriver($sizes->names(), $config),
+                ThumbnailDriverSettings::POLLORA => new PolloraThumbnailDriver($sizes->names(), $config, $sizes),
                 ThumbnailDriverSettings::BUNNY => new BunnyThumbnailDriver($config, $sizes),
-                ThumbnailDriverSettings::IMGPROXY => self::imgproxy($settings, $config),
+                ThumbnailDriverSettings::IMGPROXY => self::imgproxy($settings, $config, $sizes),
                 default => throw new InvalidArgumentException(sprintf('The sizes driver "%s" is not known; use "pollora", "bunny" or "imgproxy".', $settings->driver)),
             };
         } catch (InvalidArgumentException $invalidArgumentException) {
             $report($invalidArgumentException->getMessage().' The default driver is used.');
 
-            return new PolloraThumbnailDriver($sizes->names(), $config);
+            return new PolloraThumbnailDriver($sizes->names(), $config, $sizes);
         }
     }
 
-    private static function imgproxy(ThumbnailDriverSettings $settings, MediaConfig $config): ImgproxyThumbnailDriver
+    private static function imgproxy(ThumbnailDriverSettings $settings, MediaConfig $config, ImageSizes $sizes): ImgproxyThumbnailDriver
     {
         if ($settings->imgproxyUrl === null || $settings->imgproxyKey === null || $settings->imgproxySalt === null) {
             throw new InvalidArgumentException('The imgproxy driver needs POLLORA_MEDIA_IMGPROXY_URL, _KEY and _SALT.');
@@ -53,6 +53,7 @@ final class ThumbnailDrivers
         return new ImgproxyThumbnailDriver(
             new ImgproxySigner($settings->imgproxyKey, $settings->imgproxySalt, $settings->imgproxySignatureSize),
             $config,
+            $sizes,
             $settings->imgproxyUrl,
             $settings->imgproxySource === 's3' ? $settings->imgproxyBucket : null,
         );

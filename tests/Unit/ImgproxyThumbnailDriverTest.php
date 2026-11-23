@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Enums\Fit;
 use Pollora\Media\Domain\Enums\OutputFormat;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
@@ -12,7 +13,10 @@ use Pollora\Media\Infrastructure\ImgproxyThumbnailDriver;
 beforeEach(function (): void {
     $this->signer = new ImgproxySigner('736563726574', '68656C6C6F');
     $this->config = new MediaConfig('https://media.client.fr');
-    $this->driver = new ImgproxyThumbnailDriver($this->signer, $this->config, 'https://img.client.fr');
+    $this->sizes = new ImageSizes(fn (): string => 'secret-key');
+    $this->sizes->add('card')->cover(600, 400);
+    $this->sizes->add('hero')->scale(width: 1920)->widths([640]);
+    $this->driver = new ImgproxyThumbnailDriver($this->signer, $this->config, $this->sizes, 'https://img.client.fr');
     $this->card = new ImageSizeSpec('card', Fit::Cover, 600, 400);
 });
 
@@ -40,7 +44,7 @@ it('escapes what imgproxy would read as syntax in a plain source: percent, quest
 });
 
 it('points at the object of the bucket when the source is s3', function (): void {
-    $driver = new ImgproxyThumbnailDriver($this->signer, $this->config, 'https://img.client.fr', 'client-media');
+    $driver = new ImgproxyThumbnailDriver($this->signer, $this->config, $this->sizes, 'https://img.client.fr', 'client-media');
     $path = '/card/plain/s3://client-media/2026/10/photo.jpg@webp';
 
     expect($driver->url('2026/10/photo.jpg', $this->card, 3000, 2000))->toBe('https://img.client.fr/'.$this->signer->sign($path).$path.'?v='.$this->card->version());

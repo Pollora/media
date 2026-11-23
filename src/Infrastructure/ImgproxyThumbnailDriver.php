@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure;
 
+use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Contracts\ThumbnailDriver;
 use Pollora\Media\Domain\Enums\OutputFormat;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
@@ -21,12 +22,14 @@ use Pollora\Media\Domain\Services\ImgproxySigner;
 final readonly class ImgproxyThumbnailDriver implements ThumbnailDriver
 {
     /**
+     * @param  ImageSizes  $sizes  The declared sizes: only the name of one of them, that this driver does not refuse, is recognised
      * @param  string  $baseUrl  URL of imgproxy, without a trailing slash
      * @param  string|null  $bucket  When set, the source is the object of this bucket (`s3://`), not the URL of the library
      */
     public function __construct(
         private ImgproxySigner $signer,
         private MediaConfig $config,
+        private ImageSizes $sizes,
         private string $baseUrl,
         private ?string $bucket = null,
     ) {}
@@ -62,7 +65,9 @@ final readonly class ImgproxyThumbnailDriver implements ThumbnailDriver
             return null;
         }
 
-        return $parts[1];
+        $spec = $this->sizes->withVariants()[$parts[1]] ?? null;
+
+        return $spec instanceof ImageSizeSpec && $this->refusal($spec) === null ? $parts[1] : null;
     }
 
     public function refusal(ImageSizeSpec $spec): ?string

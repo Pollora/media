@@ -215,3 +215,13 @@ describe('an image edited in the media library', function (): void {
         expect($declared->remake($this->edited, 7))->toBe($this->edited)->and($this->processor->made)->toBe([]);
     });
 });
+
+it('gives the URL of a size of an original WordPress recorded with no dimensions, without failing', function (): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn(['file' => '2026/10/photo.jpg', 'width' => 0, 'height' => 0, 'sizes' => []]);
+
+    $image = $this->declared->downsize(false, 7, 'hero');
+
+    expect($image)->toBeArray()
+        ->and($image[0])->toStartWith('https://media.client.fr/2026/10/photo-hero-0x0-')
+        ->and([$image[1], $image[2]])->toBe([0, 0]);
+});

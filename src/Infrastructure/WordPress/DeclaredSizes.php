@@ -53,8 +53,8 @@ final class DeclaredSizes
         private readonly ?FocalPoints $focalPoints = null,
     ) {
         $this->geometry = new SizeGeometry;
-        $this->driver = $driver ?? new PolloraThumbnailDriver($sizes->names(), $config);
-        $this->focalDriver = $this->driver->makesFiles() ? $this->driver : new PolloraThumbnailDriver($sizes->names(), $config);
+        $this->driver = $driver ?? new PolloraThumbnailDriver($sizes->names(), $config, $sizes);
+        $this->focalDriver = $this->driver->makesFiles() ? $this->driver : new PolloraThumbnailDriver($sizes->names(), $config, $sizes);
     }
 
     public function register(): void

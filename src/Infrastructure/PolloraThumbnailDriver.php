@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure;
 
+use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Domain\Contracts\ThumbnailDriver;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Models\MediaConfig;
@@ -15,14 +16,18 @@ use Pollora\Media\Domain\Services\SizedFileName;
  */
 final readonly class PolloraThumbnailDriver implements ThumbnailDriver
 {
+    /**
+     * @param  ImageSizes  $sizes  The declared sizes: only the name of one of them is a size this driver recognises
+     */
     public function __construct(
         private SizedFileName $names,
         private MediaConfig $config,
+        private ImageSizes $sizes,
     ) {}
 
     public function url(string $originalKey, ImageSizeSpec $spec, int $originalWidth, int $originalHeight): string
     {
-        return $this->config->url.'/'.ltrim($this->names->for($originalKey, $spec, $originalWidth, $originalHeight), '/');
+        return $this->config->url.'/'.ltrim($this->names->for(ltrim($originalKey, '/'), $spec, $originalWidth, $originalHeight), '/');
     }
 
     public function makesFiles(): bool
@@ -38,7 +43,9 @@ final readonly class PolloraThumbnailDriver implements ThumbnailDriver
             return null;
         }
 
-        return $this->names->parse(substr($url, strlen($prefix)))['name'] ?? null;
+        $name = $this->names->parse(substr($url, strlen($prefix)))['name'] ?? null;
+
+        return $name !== null && isset($this->sizes->withVariants()[$name]) ? $name : null;
     }
 
     public function refusal(ImageSizeSpec $spec): ?string

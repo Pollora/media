@@ -35,7 +35,7 @@ beforeEach(function (): void {
 
 dataset('external drivers', [
     'bunny' => [fn (ImageSizes $sizes) => new BunnyThumbnailDriver(new MediaConfig('https://media.client.fr'), $sizes)],
-    'imgproxy' => [fn (ImageSizes $sizes) => new ImgproxyThumbnailDriver(new ImgproxySigner('736563726574', '68656C6C6F'), new MediaConfig('https://media.client.fr'), 'https://img.client.fr')],
+    'imgproxy' => [fn (ImageSizes $sizes) => new ImgproxyThumbnailDriver(new ImgproxySigner('736563726574', '68656C6C6F'), new MediaConfig('https://media.client.fr'), $sizes, 'https://img.client.fr')],
 ]);
 
 it('makes no file at upload when the service makes the sizes', function (callable $driver): void {
@@ -80,7 +80,7 @@ it('never sends a private media to the service: its size is the original, which 
 })->with('external drivers');
 
 it('leaves a size the service cannot serve to WordPress', function (): void {
-    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner('736563726574', '68656C6C6F'), $this->config, 'https://img.client.fr');
+    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner('736563726574', '68656C6C6F'), $this->config, $this->sizes, 'https://img.client.fr');
 
     expect(($this->declaredWith)($driver)->downsize(false, 7, 'default'))->toBeFalse();
 });

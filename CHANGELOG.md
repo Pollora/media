@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The three thumbnail drivers now answer the same way on the cases the adapter contract tests had listed as known deviations (#58), and `THUMBNAIL_KNOWN_DEVIATIONS` is empty. `PolloraThumbnailDriver` gives the same file name for `/a.jpg` and `a.jpg`. `BunnyThumbnailDriver` encodes `?` and `#` in the key of the original, so `sizeOf()` finds the class of `what?.jpg` again. `PolloraThumbnailDriver::sizeOf()` and `ImgproxyThumbnailDriver::sizeOf()` answer only the name of a declared size, and the imgproxy driver no longer recognises the URL of a size it refuses (`default`). The names and URLs of the keys that were valid (no leading slash, no `?` or `#`) are unchanged.
+- `SizeGeometry` no longer divides by zero for an original WordPress recorded with no dimensions: a scale or a contain keeps the dimensions it was given (no geometric resize) and `coverRegion()` keeps the whole original, so `DeclaredSizes::downsize()` and the drivers' `url()` never throw `DivisionByZeroError`.
+
+### Changed
+
+- **BREAKING**: `PolloraThumbnailDriver` takes the declared sizes (`ImageSizes`) as a third constructor argument and `ImgproxyThumbnailDriver` as its third, before the base URL (`new ImgproxyThumbnailDriver($signer, $config, $sizes, $baseUrl, $bucket)`), to recognise only declared sizes as `BunnyThumbnailDriver` already does. `ThumbnailDrivers::make()` and `DeclaredSizes` pass them; only code that builds these drivers by hand changes.
+
 ### Added
 
 - An integration suite (`tests/Integration`, `composer test:integration`) that runs against a real WordPress: the upload directory moved to the wrapper and the public URL, an uploaded image stored with the sizes WordPress and the module make through the real image editors, the URL of a declared size and the file made when it is first asked for, the focal point meta written over REST (an editor only, a point out of range refused) with the covers made around it, the legacy URLs replaced in the content, and the private flag read from the table. It is not part of the default `pest` run; the harness's optional `WordPress integration` job starts it.

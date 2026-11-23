@@ -32,7 +32,7 @@ final readonly class BunnyThumbnailDriver implements ThumbnailDriver
 
     public function url(string $originalKey, ImageSizeSpec $spec, int $originalWidth, int $originalHeight): string
     {
-        return $this->config->url.'/'.ltrim($originalKey, '/').'?class='.$this->classes->className($spec->name).'&v='.$spec->version();
+        return $this->config->url.'/'.strtr(ltrim($originalKey, '/'), ['?' => '%3F', '#' => '%23']).'?class='.$this->classes->className($spec->name).'&v='.$spec->version();
     }
 
     public function makesFiles(): bool

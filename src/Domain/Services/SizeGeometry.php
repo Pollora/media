@@ -21,11 +21,24 @@ final class SizeGeometry
      */
     public function dimensions(ImageSizeSpec $spec, int $originalWidth, int $originalHeight): array
     {
+        if (($spec->fit === Fit::Scale || $spec->fit === Fit::Contain) && ! $this->isKnown($originalWidth, $originalHeight)) {
+            // WordPress did not record the dimensions of the original: nothing to scale from, so no geometric resize.
+            return [max(0, $originalWidth), max(0, $originalHeight)];
+        }
+
         return match ($spec->fit) {
             Fit::Cover => $this->cover($spec, $originalWidth, $originalHeight),
             Fit::Scale => $this->scale($spec, $originalWidth, $originalHeight),
             Fit::Contain => $this->contain($spec, $originalWidth, $originalHeight),
         };
+    }
+
+    /**
+     * Whether both dimensions of an original are known: WordPress records 0 (or nothing) for an image it could not read.
+     */
+    private function isKnown(int $originalWidth, int $originalHeight): bool
+    {
+        return $originalWidth > 0 && $originalHeight > 0;
     }
 
     /**
@@ -36,6 +49,10 @@ final class SizeGeometry
      */
     public function coverRegion(int $originalWidth, int $originalHeight, int $boxWidth, int $boxHeight, Anchor $anchor = Anchor::Center, ?FocalPoint $focal = null): array
     {
+        if (! $this->isKnown($originalWidth, $originalHeight)) {
+            return ['x' => 0, 'y' => 0, 'width' => max(0, $originalWidth), 'height' => max(0, $originalHeight)];
+        }
+
         $ratio = $boxWidth / $boxHeight;
 
         if ($originalWidth / $originalHeight > $ratio) {
