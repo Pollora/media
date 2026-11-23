@@ -97,3 +97,18 @@ it('keeps the fingerprint of a centered size as it was before anchors, and chang
         ->and((new ImageSizeSpec('card', Fit::Cover, 600, 400, anchor: Anchor::Top))->version())->not->toBe($centered->version())
         ->and((new ImageSizeSpec('card', Fit::Cover, 600, 400, anchor: Anchor::Top))->fingerprint())->not->toBe((new ImageSizeSpec('card', Fit::Cover, 600, 400, anchor: Anchor::Bottom))->fingerprint());
 });
+
+it('does not resize an original whose dimensions are unknown, and never divides by zero', function (Fit $fit, ?int $width, ?int $height, int $originalWidth, int $originalHeight): void {
+    expect((new SizeGeometry)->dimensions(spec($fit, $width, $height), $originalWidth, $originalHeight))->toBe([$originalWidth, $originalHeight]);
+})->with([
+    'scale by width, 0 x 0' => [Fit::Scale, 300, null, 0, 0],
+    'scale by height, 0 x 0' => [Fit::Scale, null, 300, 0, 0],
+    'scale in a box, width only unknown' => [Fit::Scale, 300, 200, 0, 800],
+    'contain, 0 x 0' => [Fit::Contain, 800, 200, 0, 0],
+    'contain, height only unknown' => [Fit::Contain, 800, 200, 1200, 0],
+]);
+
+it('keeps the whole of an original whose dimensions are unknown as the region of a cover', function (): void {
+    expect((new SizeGeometry)->coverRegion(0, 0, 600, 400))->toBe(['x' => 0, 'y' => 0, 'width' => 0, 'height' => 0])
+        ->and((new SizeGeometry)->coverRegion(800, 0, 600, 400))->toBe(['x' => 0, 'y' => 0, 'width' => 800, 'height' => 0]);
+});

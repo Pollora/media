@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The three thumbnail drivers now answer the same way on the cases the adapter contract tests had listed as known deviations (#58), and `THUMBNAIL_KNOWN_DEVIATIONS` is empty. `PolloraThumbnailDriver` gives the same file name for `/a.jpg` and `a.jpg`. `BunnyThumbnailDriver` encodes `?` and `#` in the key of the original, so `sizeOf()` finds the class of `what?.jpg` again. `PolloraThumbnailDriver::sizeOf()` and `ImgproxyThumbnailDriver::sizeOf()` answer only the name of a declared size, and the imgproxy driver no longer recognises the URL of a size it refuses (`default`). The names and URLs of the keys that were valid (no leading slash, no `?` or `#`) are unchanged.
+- `SizeGeometry` no longer divides by zero for an original WordPress recorded with no dimensions: a scale or a contain keeps the dimensions it was given (no geometric resize) and `coverRegion()` keeps the whole original, so `DeclaredSizes::downsize()` and the drivers' `url()` never throw `DivisionByZeroError`.
+
+### Changed
+
+- **BREAKING**: `PolloraThumbnailDriver` takes the declared sizes (`ImageSizes`) as a third constructor argument and `ImgproxyThumbnailDriver` as its third, before the base URL (`new ImgproxyThumbnailDriver($signer, $config, $sizes, $baseUrl, $bucket)`), to recognise only declared sizes as `BunnyThumbnailDriver` already does. `ThumbnailDrivers::make()` and `DeclaredSizes` pass them; only code that builds these drivers by hand changes.
+
+||||||| d54194b
 ### Security
 
 - A size signature is never made with an empty key (#53). With an empty `app.key` (or a blank salt) the HMAC of a file name was computable by anyone, who could then have the declared sizes made for any original. `SizedFileName` now throws `InvalidMediaConfigurationException::emptySigningKey()` when the key it resolves is empty or blank, with a message that says what to set (`APP_KEY`, or the WordPress salts); the key is still resolved when a signature is made, so a key known late works, and an installation with a key sees no change: the file names and signatures are what they were (the signature stays cut to 12 hexadecimal digits, which a name already issued depends on).

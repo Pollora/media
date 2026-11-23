@@ -31,7 +31,7 @@ beforeEach(function (): void {
     $this->make = fn ($driver = null, ?Closure $isPrivate = null): DeclaredSizes => new DeclaredSizes($this->sizes, $this->config, $this->disk->storage, $this->processor, $driver, $isPrivate, new FocalPoints);
     $this->plain = fn (string $size): string => $this->sizes->names()->for('2026/10/photo.jpg', $this->sizes->get($size), 3000, 2000);
     $this->around = fn (string $size): string => $this->sizes->names()->for('2026/10/photo.jpg', $this->sizes->get($size)->focusedOn($this->point), 3000, 2000);
-    $this->imgproxy = fn () => new ImgproxyThumbnailDriver(new ImgproxySigner('736563726574', '68656C6C6F'), $this->config, 'https://img.client.fr');
+    $this->imgproxy = fn () => new ImgproxyThumbnailDriver(new ImgproxySigner('736563726574', '68656C6C6F'), $this->config, $this->sizes, 'https://img.client.fr');
 });
 
 it('gives the URL of a cover around the focal point of the image, with the dimensions it always had', function (): void {

@@ -187,7 +187,7 @@ it('signs an imgproxy path with the key and the salt, and a path that was altere
 });
 
 it('never puts the imgproxy key or salt in a URL, an exception or a trace', function (): void {
-    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, 'https://img.client.fr');
+    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, $this->sizes, 'https://img.client.fr');
     $url = $driver->url('2026/10/photo.jpg', new ImageSizeSpec('card', Fit::Cover, 600, 400), 3000, 2000);
     $leaks = [];
 
@@ -223,7 +223,7 @@ it('never puts the imgproxy key or salt in a URL, an exception or a trace', func
 // (3) The source: nothing a visitor writes ever becomes the source of an image.
 
 it('takes the source of an imgproxy URL from the library alone, whatever the key looks like', function (string $key): void {
-    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, 'https://img.client.fr');
+    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, $this->sizes, 'https://img.client.fr');
     $url = $driver->url($key, new ImageSizeSpec('card', Fit::Cover, 600, 400), 3000, 2000);
 
     expect($url)->toStartWith('https://img.client.fr/')
@@ -238,13 +238,13 @@ it('takes the source of an imgproxy URL from the library alone, whatever the key
 ]);
 
 it('uses the bucket of the library as the source in s3 mode, and no other', function (): void {
-    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, 'https://img.client.fr', 'client-media');
+    $driver = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, $this->sizes, 'https://img.client.fr', 'client-media');
 
     expect($driver->url('2026/a.jpg', new ImageSizeSpec('card', Fit::Cover, 600, 400), 3000, 2000))->toContain('/card/plain/s3://client-media/2026/a.jpg');
 });
 
 it('does not take a URL that is not the library\'s or the service\'s for one of its sizes', function (string $url): void {
-    $imgproxy = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, 'https://img.client.fr');
+    $imgproxy = new ImgproxyThumbnailDriver(new ImgproxySigner(SEC06_KEY_HEX, SEC06_SALT_HEX), $this->config, $this->sizes, 'https://img.client.fr');
     $bunny = new BunnyThumbnailDriver($this->config, $this->sizes);
 
     expect($imgproxy->sizeOf($url))->toBeNull()->and($bunny->sizeOf($url))->toBeNull();
