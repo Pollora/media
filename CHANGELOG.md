@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
 ### Fixed
 
 - The three thumbnail drivers now answer the same way on the cases the adapter contract tests had listed as known deviations (#58), and `THUMBNAIL_KNOWN_DEVIATIONS` is empty. `PolloraThumbnailDriver` gives the same file name for `/a.jpg` and `a.jpg`. `BunnyThumbnailDriver` encodes `?` and `#` in the key of the original, so `sizeOf()` finds the class of `what?.jpg` again. `PolloraThumbnailDriver::sizeOf()` and `ImgproxyThumbnailDriver::sizeOf()` answer only the name of a declared size, and the imgproxy driver no longer recognises the URL of a size it refuses (`default`). The names and URLs of the keys that were valid (no leading slash, no `?` or `#`) are unchanged.
@@ -17,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **BREAKING**: `PolloraThumbnailDriver` takes the declared sizes (`ImageSizes`) as a third constructor argument and `ImgproxyThumbnailDriver` as its third, before the base URL (`new ImgproxyThumbnailDriver($signer, $config, $sizes, $baseUrl, $bucket)`), to recognise only declared sizes as `BunnyThumbnailDriver` already does. `ThumbnailDrivers::make()` and `DeclaredSizes` pass them; only code that builds these drivers by hand changes.
 
 ||||||| d54194b
+- The unit suite loads its stand-in for WP-CLI from `tests/bootstrap.php` instead of `tests/Pest.php`, which the integration suite also loads (a real WordPress must not find a `WP_CLI` that is not WP-CLI). No change to the package.
+
 ### Security
 
 - A size signature is never made with an empty key (#53). With an empty `app.key` (or a blank salt) the HMAC of a file name was computable by anyone, who could then have the declared sizes made for any original. `SizedFileName` now throws `InvalidMediaConfigurationException::emptySigningKey()` when the key it resolves is empty or blank, with a message that says what to set (`APP_KEY`, or the WordPress salts); the key is still resolved when a signature is made, so a key known late works, and an installation with a key sees no change: the file names and signatures are what they were (the signature stays cut to 12 hexadecimal digits, which a name already issued depends on).
@@ -24,13 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - An integration suite (`tests/Integration`, `composer test:integration`) that runs against a real WordPress: the upload directory moved to the wrapper and the public URL, an uploaded image stored with the sizes WordPress and the module make through the real image editors, the URL of a declared size and the file made when it is first asked for, the focal point meta written over REST (an editor only, a point out of range refused) with the covers made around it, the legacy URLs replaced in the content, and the private flag read from the table. It is not part of the default `pest` run; the harness's optional `WordPress integration` job starts it.
-
-### Changed
-
-- The unit suite loads its stand-in for WP-CLI from `tests/bootstrap.php` instead of `tests/Pest.php`, which the integration suite also loads (a real WordPress must not find a `WP_CLI` that is not WP-CLI). No change to the package.
-
-### Added
-
 - A focal point per image (#18). The post meta `_pollora_focal_point` (`{x, y}`, fractions of the original from 0 to 1, kept to a thousandth) is declared with `register_post_meta()` and a schema, so it is read and written over REST by a user who can edit the attachment. `FocalPoint` validates it (a value that is not a point is no point), `FocalPoints` reads it typed, once per media (`$media->focalPoints()->for($id)`, `set()`, `clear()`), and the new `pollora/media/focal_point` filter has the last word. With a point, `SizeGeometry::coverRegion(..., $anchor, $focal)` centres the region on it, clamped to the edges, instead of using the anchor; dimensions, `srcset` and the sizes that do not crop are unchanged. `ImageSizeSpec` gets an optional `$focal` and `focusedOn()`; the point is part of `fingerprint()` and of the signature, and the file of a cover around one is named `photo-card-600x400-f0250_0750-{signature}.webp`, so moving the point never leaves a stale copy and the fallback route makes the file from its name alone, with no lookup. The files of a size of an image without a point keep their names. Changing or removing the point deletes the files made around the previous one and makes the `eager()` covers around the new one; `thumbs prune` removes the crops around a point that is not the image's any more; the files go with the media. imgproxy and Bunny cannot hold a point in a preset or a class: a cover of an image with a point is made by the module whatever the driver (so the fallback route is now registered with these drivers too), a private media stays kept from the service. `ThumbnailRoute` accepts the new segment. `DeclaredSizes::make()`, `fileFor()` and `existingFiles()` take an optional focal point, `SizePruner` an optional `$focalOf` closure, `SizedFileName::parse()` returns the point as `focal`. No editing screen yet.
 
 ## [0.9.0] - 2026-11-19
