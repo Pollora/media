@@ -14,6 +14,10 @@ permissions: {}
 
 jobs:
   harness:
-    uses: Pollora/harness/.github/workflows/php-package.yml@v0.1.35
+    uses: Pollora/harness/.github/workflows/php-package.yml@v0.1.36
+    with:
+      # The whole mutation pass (the msi floor of the ratchet, run on main and every night) lasts more than the default 30
+      # minutes on the runner: a limit of 30 cancelled it. 90 is an estimate to confirm with the first run.
+      quality-timeout-minutes: 90
     permissions:
       contents: read
