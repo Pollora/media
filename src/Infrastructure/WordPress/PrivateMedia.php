@@ -180,6 +180,6 @@ final class PrivateMedia
 
         $signed = $this->storage->temporaryUrl(substr($url, strlen($prefix)), new DateTimeImmutable($this->config->privateExpiry)) ?? $url;
 
-        return (string) \apply_filters('pollora/media/signed_url', $signed, $attachmentId);
+        return Cast::text(\apply_filters('pollora/media/signed_url', $signed, $attachmentId));
     }
 }

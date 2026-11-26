@@ -6,6 +6,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 
 use Closure;
 use League\Flysystem\Filesystem;
+use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
@@ -143,7 +144,9 @@ final class ConstantsConfiguration
             ],
         ], static fn (mixed $value): bool => $value !== null);
 
-        return new Filesystem(new $adapter(new $client($options), $bucket));
+        $disk = new $adapter(new $client($options), $bucket);
+
+        return $disk instanceof FilesystemAdapter ? new Filesystem($disk) : throw InvalidMediaConfigurationException::missingS3Package();
     }
 
     private function read(string $name): mixed

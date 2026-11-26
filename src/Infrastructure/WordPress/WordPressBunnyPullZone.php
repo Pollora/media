@@ -29,7 +29,13 @@ final readonly class WordPressBunnyPullZone implements BunnyPullZone
 
         foreach (is_array($body['OptimizerClasses'] ?? null) ? $body['OptimizerClasses'] : [] as $class) {
             if (is_array($class) && is_string($class['Name'] ?? null)) {
-                $classes[] = ['Name' => $class['Name'], 'Properties' => array_map(Cast::text(...), (array) ($class['Properties'] ?? []))];
+                $properties = [];
+
+                foreach ((array) ($class['Properties'] ?? []) as $property => $value) {
+                    $properties[(string) $property] = Cast::text($value);
+                }
+
+                $classes[] = ['Name' => $class['Name'], 'Properties' => $properties];
             }
         }
 
@@ -46,7 +52,7 @@ final readonly class WordPressBunnyPullZone implements BunnyPullZone
 
     /**
      * @param  array<string, mixed>|null  $payload
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      */
     private function request(string $method, string $pullZone, ?array $payload = null): array
     {

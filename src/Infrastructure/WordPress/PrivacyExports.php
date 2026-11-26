@@ -7,6 +7,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Exceptions\PrivacyExportFailedException;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Infrastructure\Cast;
 use Throwable;
 
 /**
@@ -72,7 +73,7 @@ final readonly class PrivacyExports
 
     public function deleteOld(): void
     {
-        $expiration = (int) \apply_filters('wp_privacy_export_expiration', 3 * 24 * 3600);
+        $expiration = Cast::integer(\apply_filters('wp_privacy_export_expiration', 3 * 24 * 3600));
 
         try {
             foreach ($this->storage->list(self::FOLDER) as $entry) {

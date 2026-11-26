@@ -178,6 +178,7 @@ final class MediaCommand
 
     private function replaceUrls(string $old, bool $execute): void
     {
+        /** @var \wpdb $wpdb The global WordPress sets, which has no declared type */
         global $wpdb;
 
         $changed = (new UrlReplacement($wpdb))->replace(rtrim($old, '/'), $this->config->url, ! $execute);
