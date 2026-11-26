@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A personal data export archive that cannot be read is no longer copied to the disk as an empty file before a `TypeError`: `PrivacyExportFailedException` is thrown and the disk is left alone
+- A write through `pollora://` no longer ends in a `TypeError` when the temporary directory cannot be written: the file is stored, only its local copy is given up
+
 ## [0.10.0] - 2026-11-24
 
 ### Fixed
