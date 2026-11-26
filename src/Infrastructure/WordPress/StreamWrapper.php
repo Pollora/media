@@ -7,7 +7,6 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use LogicException;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
-use RuntimeException;
 use Throwable;
 
 /**
@@ -173,8 +172,8 @@ final class StreamWrapper
                 return $this->fail();
             }
 
-            if ((in_array($kind, ['r', 'a', 'c'], true)) && $exists) {
-                $this->load(self::$storage, $key, $copy);
+            if ((in_array($kind, ['r', 'a', 'c'], true)) && $exists && ! $this->load(self::$storage, $key, $copy)) {
+                return $this->fail();
             }
 
             if ($kind === 'a') {
@@ -445,15 +444,16 @@ final class StreamWrapper
 
     /**
      * Fills the buffer from the local copy when there is one, else from the disk, and remembers a file that is not too big.
+     *
+     * @return bool False when the local copy cannot be opened
      */
-    private function load(MediaStorage $storage, string $key, ?string $copy): void
+    private function load(MediaStorage $storage, string $key, ?string $copy): bool
     {
         $buffer = $this->buffer();
         $source = $copy !== null ? fopen($copy, 'rb') : $storage->readStream($key);
 
         if ($source === false) {
-            // Caught by stream_open(), which fails the opening
-            throw new RuntimeException(sprintf('The local copy of %s cannot be read.', $key));
+            return false;
         }
 
         stream_copy_to_stream($source, $buffer);
@@ -466,6 +466,8 @@ final class StreamWrapper
             self::$stats[$key] ??= ['size' => $size, 'mtime' => time()];
             $this->keepCopy($key, $size);
         }
+
+        return true;
     }
 
     /**

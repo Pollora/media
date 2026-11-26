@@ -274,6 +274,19 @@ it('deletes without asking the disk first, and says false for a file it found mi
         ->and(@unlink('pollora://gone.jpg'))->toBeFalse();
 });
 
+it('fails to open a file whose local copy has gone, rather than reading it as empty', function (): void {
+    $before = glob(sys_get_temp_dir().'/pollora-media-copy-*') ?: [];
+    file_put_contents('pollora://gone/copy.txt', 'bytes');
+    $copies = array_diff(glob(sys_get_temp_dir().'/pollora-media-copy-*') ?: [], $before);
+
+    expect($copies)->toHaveCount(1);
+
+    array_map(unlink(...), $copies);
+
+    // The warning of the failed fopen() is what PHP itself says; the result is what matters
+    expect(@file_get_contents('pollora://gone/copy.txt'))->toBeFalse();
+});
+
 it('takes pollora://uploads as the root of the library, so WordPress can trim the slashes of its base', function (): void {
     file_put_contents('pollora://uploads/2026/10/a.jpg', 'x');
 

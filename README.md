@@ -28,7 +28,7 @@ WordPress media on any Flysystem disk (local, S3, R2, Scaleway…), behind two s
 composer require pollora/media
 ```
 
-Requires PHP 8.3+, WordPress and [Flysystem](https://flysystem.thephpleague.com) 3. For S3 and compatible services (R2, Scaleway, MinIO, OVH) add the driver:
+Requires PHP 8.3+, WordPress 6.2+ and [Flysystem](https://flysystem.thephpleague.com) 3. For S3 and compatible services (R2, Scaleway, MinIO, OVH) add the driver:
 
 ```bash
 composer require league/flysystem-aws-s3-v3
