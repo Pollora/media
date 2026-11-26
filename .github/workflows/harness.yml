@@ -14,8 +14,11 @@ permissions: {}
 
 jobs:
   harness:
-    uses: Pollora/harness/.github/workflows/php-package.yml@v0.1.36
+    uses: Pollora/harness/.github/workflows/php-package.yml@v0.1.39
     with:
+      # Runs the integration suite against a real WordPress and a real MySQL (job "WordPress integration"). The job
+      # starts it through the test:integration script of composer.json.
+      wordpress-integration: tests/Integration
       # The whole mutation pass (the msi floor of the ratchet, run on main and every night) lasts more than the default 30
       # minutes on the runner: a limit of 30 cancelled it. 90 is an estimate to confirm with the first run.
       quality-timeout-minutes: 90
