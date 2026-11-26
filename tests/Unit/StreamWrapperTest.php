@@ -283,8 +283,14 @@ it('fails to open a file whose local copy has gone, rather than reading it as em
 
     array_map(unlink(...), $copies);
 
-    // The warning of the failed fopen() is what PHP itself says; the result is what matters
-    expect(@file_get_contents('pollora://gone/copy.txt'))->toBeFalse();
+    // PHP warns of the failed fopen(): the result is what matters here
+    set_error_handler(static fn (): bool => true);
+
+    try {
+        expect(file_get_contents('pollora://gone/copy.txt'))->toBeFalse();
+    } finally {
+        restore_error_handler();
+    }
 });
 
 it('takes pollora://uploads as the root of the library, so WordPress can trim the slashes of its base', function (): void {
