@@ -92,7 +92,7 @@ final readonly class ThumbnailExporter
                 $created[] = $name;
                 $lines[] = sprintf('+ %s %s', $name, $this->describe($properties));
             } elseif ($this->normalized($classes[$index]['Properties']) !== $properties) {
-                $classes[$index]['Properties'] = $properties;
+                $classes = array_values(array_replace($classes, [$index => ['Name' => $name, 'Properties' => $properties]]));
                 $updated[] = $name;
                 $lines[] = sprintf('~ %s %s', $name, $this->describe($properties));
             } else {

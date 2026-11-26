@@ -219,12 +219,12 @@ final class DeclaredSizes
         }
 
         if ($this->isGif($metadata)) {
-            return [$this->url((string) $metadata['file']), (int) $metadata['width'], (int) $metadata['height'], false];
+            return [$this->url((string) ($metadata['file'] ?? '')), (int) ($metadata['width'] ?? 0), (int) ($metadata['height'] ?? 0), false];
         }
 
-        [$width, $height] = $this->geometry->dimensions($spec, (int) $metadata['width'], (int) $metadata['height']);
+        [$width, $height] = $this->geometry->dimensions($spec, (int) ($metadata['width'] ?? 0), (int) ($metadata['height'] ?? 0));
 
-        return [$driver->url((string) $metadata['file'], $spec, (int) $metadata['width'], (int) $metadata['height']), $width, $height, true];
+        return [$driver->url((string) ($metadata['file'] ?? ''), $spec, (int) ($metadata['width'] ?? 0), (int) ($metadata['height'] ?? 0)), $width, $height, true];
     }
 
     /**

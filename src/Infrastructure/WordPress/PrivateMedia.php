@@ -116,13 +116,14 @@ final class PrivateMedia
      */
     public function isPrivateFile(string $file): bool
     {
+        /** @var \wpdb|null $wpdb The global WordPress sets, which has no declared type */
         global $wpdb;
 
         if (! function_exists('get_post_meta') || ! is_object($wpdb)) {
             return true;
         }
 
-        $id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_wp_attached_file' AND meta_value = %s LIMIT 1", $file));
+        $id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM %i WHERE meta_key = '_wp_attached_file' AND meta_value = %s LIMIT 1", $wpdb->postmeta, $file));
 
         return $id !== null && $this->isPrivate((int) $id);
     }

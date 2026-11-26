@@ -6,6 +6,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -148,8 +149,14 @@ final class StreamWrapper
             return $this->fail();
         }
 
+        $buffer = fopen('php://temp', 'w+b');
+
+        if ($buffer === false) {
+            return $this->fail();
+        }
+
         $this->key = $key;
-        $this->buffer = fopen('php://temp', 'w+b');
+        $this->buffer = $buffer;
         $kind = $mode[0] ?? 'r';
         $this->writable = $kind !== 'r' || str_contains($mode, '+');
 
@@ -183,7 +190,7 @@ final class StreamWrapper
 
     public function stream_read(int $count): string|false
     {
-        return fread($this->buffer, $count);
+        return $count > 0 ? fread($this->buffer, $count) : '';
     }
 
     public function stream_write(string $data): int
@@ -216,7 +223,7 @@ final class StreamWrapper
     {
         $this->dirty = true;
 
-        return ftruncate($this->buffer, $size);
+        return $size >= 0 && ftruncate($this->buffer, $size);
     }
 
     public function stream_flush(): bool
@@ -429,6 +436,12 @@ final class StreamWrapper
     private function load(string $key, ?string $copy): void
     {
         $source = $copy !== null ? fopen($copy, 'rb') : self::$storage->readStream($key);
+
+        if ($source === false) {
+            // Caught by stream_open(), which fails the opening
+            throw new RuntimeException(sprintf('The local copy of %s cannot be read.', $key));
+        }
+
         stream_copy_to_stream($source, $this->buffer);
         fclose($source);
 
