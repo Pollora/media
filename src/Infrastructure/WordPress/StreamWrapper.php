@@ -455,7 +455,13 @@ final class StreamWrapper
         }
 
         $path = sys_get_temp_dir().'/pollora-media-copy-'.bin2hex(random_bytes(8));
-        $handle = fopen($path, 'wb');
+        $handle = @fopen($path, 'wb');
+
+        if ($handle === false) {
+            // No temporary directory to write to: the file is on the disk, only the local copy is given up
+            return;
+        }
+
         $position = (int) ftell($this->buffer);
         rewind($this->buffer);
         stream_copy_to_stream($this->buffer, $handle);

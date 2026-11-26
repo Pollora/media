@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Brain\Monkey\Filters;
+use Pollora\Media\Domain\Exceptions\PrivacyExportFailedException;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Infrastructure\WordPress\PrivacyExports;
 use Pollora\Media\Tests\Fixtures\TemporaryStorage;
@@ -57,4 +58,19 @@ it('deletes the archives on the disk that are older than the expiry, and no othe
     expect(file_exists($this->disk->root.'/wp-personal-data-exports/old.zip'))->toBeFalse()
         ->and(file_exists($this->disk->root.'/wp-personal-data-exports/new.zip'))->toBeTrue()
         ->and(file_exists($this->disk->root.'/2026/photo.jpg'))->toBeTrue();
+});
+
+it('puts nothing on the disk for an archive it cannot read', function (): void {
+    $zip = $this->exports->exportsDir('pollora://uploads/wp-personal-data-exports/').'wp-personal-data-export-locked.zip';
+    file_put_contents($zip, 'zip bytes');
+    chmod($zip, 0000);
+
+    try {
+        expect(fn (): mixed => $this->exports->exportCreated($zip))
+            ->toThrow(PrivacyExportFailedException::class, 'wp-personal-data-export-locked.zip cannot be read');
+        expect(file_exists($this->disk->root.'/wp-personal-data-exports/wp-personal-data-export-locked.zip'))->toBeFalse();
+    } finally {
+        chmod($zip, 0600);
+        unlink($zip);
+    }
 });

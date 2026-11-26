@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pollora\Media\Infrastructure\WordPress;
 
 use Pollora\Media\Domain\Contracts\MediaStorage;
+use Pollora\Media\Domain\Exceptions\PrivacyExportFailedException;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Throwable;
 
@@ -57,7 +58,13 @@ final readonly class PrivacyExports
             return;
         }
 
-        $handle = fopen($archive, 'rb');
+        $handle = is_readable($archive) ? fopen($archive, 'rb') : false;
+
+        if ($handle === false) {
+            // Without this, an empty file would be written under the name of the archive
+            throw PrivacyExportFailedException::unreadableArchive($archive);
+        }
+
         $this->storage->write(self::FOLDER.'/'.basename($archive), $handle);
         fclose($handle);
         unlink($archive);
