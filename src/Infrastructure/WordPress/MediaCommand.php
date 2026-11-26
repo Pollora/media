@@ -10,6 +10,7 @@ use Pollora\Media\Application\Services\MediaMigrator;
 use Pollora\Media\Application\Services\MediaStatus;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Infrastructure\Cast;
 use Pollora\Media\Infrastructure\Flysystem\FlysystemMediaStorage;
 use WP_CLI;
 
@@ -138,13 +139,13 @@ final class MediaCommand
     public function migrate(array $args, array $assoc): void
     {
         $execute = isset($assoc['execute']);
-        $from = (string) ($assoc['from'] ?? $this->localUploadsPath);
+        $from = Cast::text($assoc['from'] ?? $this->localUploadsPath);
 
         if (! is_dir($from)) {
             WP_CLI::error('The source folder does not exist: '.$from);
         }
 
-        $exclude = array_values(array_filter(array_map(trim(...), explode(',', (string) ($assoc['exclude'] ?? '')))));
+        $exclude = array_values(array_filter(array_map(trim(...), explode(',', Cast::text($assoc['exclude'] ?? '')))));
 
         $report = (new MediaMigrator(new FlysystemMediaStorage(new Filesystem(new LocalFilesystemAdapter($from))), $this->storage, $this->config->cacheControl))
             ->migrate(! $execute, static function (string $path, string $outcome): void {
@@ -163,7 +164,7 @@ final class MediaCommand
         ));
 
         if (isset($assoc['replace-urls'])) {
-            $this->replaceUrls((string) ($assoc['old-url'] ?? $this->localUploadsUrl), $execute);
+            $this->replaceUrls(Cast::text($assoc['old-url'] ?? $this->localUploadsUrl), $execute);
         }
 
         if (! $execute) {

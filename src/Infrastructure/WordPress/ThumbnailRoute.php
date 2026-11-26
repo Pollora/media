@@ -7,6 +7,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use Pollora\Media\Application\Services\ThumbnailResult;
 use Pollora\Media\Application\Services\ThumbnailService;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Infrastructure\Cast;
 
 /**
  * The fallback for a size that does not exist yet, for WordPress without Laravel: the web server sends
@@ -32,7 +33,7 @@ final readonly class ThumbnailRoute
      */
     public function handle(): void
     {
-        $result = $this->resolve((string) ($_SERVER['REQUEST_URI'] ?? ''));
+        $result = $this->resolve(Cast::text($_SERVER['REQUEST_URI'] ?? ''));
 
         if (! $result instanceof ThumbnailResult || $result->status !== 200 || ! is_resource($result->body)) {
             return;

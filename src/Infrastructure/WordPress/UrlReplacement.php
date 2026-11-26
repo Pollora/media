@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pollora\Media\Infrastructure\WordPress;
 
 use Pollora\Media\Domain\Services\SerializedReplacer;
+use Pollora\Media\Infrastructure\Cast;
+use stdClass;
 
 /**
  * Replaces the base URL of the media library in the database after a
@@ -84,13 +86,15 @@ final class UrlReplacement
                     self::BATCH,
                 ));
 
-                if (! is_array($rows) || $rows === []) {
+                $rows = array_filter((array) $rows, static fn (mixed $row): bool => $row instanceof stdClass);
+
+                if ($rows === []) {
                     break;
                 }
 
                 foreach ($rows as $row) {
-                    $last = (int) $row->id;
-                    $new = $this->replacer->replace((string) $row->value, $search, $replace);
+                    $last = Cast::integer($row->id);
+                    $new = $this->replacer->replace(Cast::text($row->value), $search, $replace);
 
                     if ($new === $row->value) {
                         continue;

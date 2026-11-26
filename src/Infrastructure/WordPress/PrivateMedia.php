@@ -7,6 +7,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 use DateTimeImmutable;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
+use Pollora\Media\Infrastructure\Cast;
 use Throwable;
 
 /**
@@ -49,7 +50,7 @@ final class PrivateMedia
     {
         return $this->known[$attachmentId] ??= (bool) \apply_filters(
             'pollora/media/is_private',
-            (string) \get_post_meta($attachmentId, self::META, true) === '1',
+            Cast::text(\get_post_meta($attachmentId, self::META, true)) === '1',
             $attachmentId,
         );
     }
@@ -104,7 +105,7 @@ final class PrivateMedia
         }
 
         foreach ($sources as $width => $source) {
-            $sources[$width]['url'] = $this->sign((string) $source['url'], $attachmentId);
+            $sources[$width]['url'] = $this->sign(Cast::text($source['url']), $attachmentId);
         }
 
         return $sources;

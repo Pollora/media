@@ -6,6 +6,7 @@ namespace Pollora\Media\Infrastructure\WordPress;
 
 use InvalidArgumentException;
 use Pollora\Media\Domain\Models\FocalPoint;
+use Pollora\Media\Infrastructure\Cast;
 
 /**
  * The focal point of an image: the part an editor wants kept whatever the crop. It is a post meta of the
@@ -130,7 +131,7 @@ final class FocalPoints
         $points = [];
 
         foreach (\get_posts(['post_type' => 'attachment', 'post_status' => 'any', 'fields' => 'ids', 'nopaging' => true, 'meta_key' => self::META]) as $id) {
-            $file = (string) \get_post_meta((int) $id, '_wp_attached_file', true);
+            $file = Cast::text(\get_post_meta((int) $id, '_wp_attached_file', true));
             $point = $this->for((int) $id);
 
             if ($file !== '' && $point instanceof FocalPoint) {

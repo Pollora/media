@@ -10,6 +10,7 @@ use League\Flysystem\FilesystemOperator;
 use League\Flysystem\StorageAttributes;
 use League\Flysystem\UnableToGenerateTemporaryUrl;
 use Pollora\Media\Domain\Contracts\MediaStorage;
+use Pollora\Media\Infrastructure\Cast;
 
 /**
  * The media storage on any Flysystem v3 filesystem. A Laravel disk is one
@@ -103,11 +104,19 @@ final readonly class FlysystemMediaStorage implements MediaStorage
             $entries[] = [
                 'path' => $attributes->path(),
                 'type' => $attributes->isDir() ? 'dir' : 'file',
-                'size' => $attributes->isFile() ? (int) ($attributes->jsonSerialize()['file_size'] ?? 0) : 0,
+                'size' => $attributes->isFile() ? $this->sizeIn($attributes->jsonSerialize()) : 0,
                 'lastModified' => (int) ($attributes->lastModified() ?? 0),
             ];
         }
 
         return $entries;
+    }
+
+    /**
+     * The size in what Flysystem serialises of a file.
+     */
+    private function sizeIn(mixed $attributes): int
+    {
+        return Cast::integer(is_array($attributes) ? ($attributes['file_size'] ?? 0) : 0);
     }
 }

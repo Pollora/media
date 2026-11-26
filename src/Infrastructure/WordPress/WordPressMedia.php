@@ -18,6 +18,7 @@ use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Domain\Services\LegacyUrlRewriter;
 use Pollora\Media\ImageSize;
+use Pollora\Media\Infrastructure\Cast;
 use Pollora\Media\Infrastructure\Locking\FlockGenerationLock;
 use Pollora\Media\Infrastructure\ThumbnailDrivers;
 use Throwable;
@@ -136,8 +137,8 @@ final class WordPressMedia
             return $dirs;
         }
 
-        $site = preg_match('#/sites/\d+$#D', (string) $dirs['basedir'], $match) === 1 ? $match[0] : '';
-        $subdir = (string) $dirs['subdir'];
+        $site = preg_match('#/sites/\d+$#D', Cast::text($dirs['basedir']), $match) === 1 ? $match[0] : '';
+        $subdir = Cast::text($dirs['subdir']);
 
         $dirs['basedir'] = StreamWrapper::ROOT.$site;
         $dirs['baseurl'] = $this->config->url.$site;
@@ -183,7 +184,7 @@ final class WordPressMedia
 
         foreach (is_array($files) ? $files : [] as $path) {
             try {
-                $path = ltrim((string) $path, '/');
+                $path = ltrim(Cast::text($path), '/');
 
                 if ($this->storage->exists($path)) {
                     $this->storage->delete($path);
@@ -302,7 +303,7 @@ final class WordPressMedia
 
     private function constant(string $name): string
     {
-        return defined($name) ? (string) constant($name) : '';
+        return defined($name) ? Cast::text(constant($name)) : '';
     }
 
     public function content(string $content): string
