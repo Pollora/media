@@ -93,6 +93,7 @@ final class PrivateMedia
 
     /**
      * @param  array<int, array<string, mixed>>|false  $sources
+     * @param  array<int, int>  $sizeArray
      * @param  array<string, mixed>  $imageMeta
      * @return array<int, array<string, mixed>>|false
      */

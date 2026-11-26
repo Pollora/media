@@ -234,6 +234,9 @@ final class StreamWrapper
         return false;
     }
 
+    /**
+     * @return array<int|string, int>|false
+     */
     public function stream_stat(): array|false
     {
         $stat = fstat($this->buffer);
