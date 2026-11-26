@@ -170,7 +170,7 @@ it('counts then replaces a media URL in the tables of the database, serialized v
     $new = Library::URL;
     $id = wp_insert_post(['post_title' => 'URL replacement', 'post_status' => 'draft', 'post_content' => '<img src="'.$old.'/a.jpg">']);
     add_post_meta($id, '_pollora_probe', ['src' => $old.'/b.jpg']);
-    $stored = static fn (): string => (string) $wpdb->get_var($wpdb->prepare('SELECT post_content FROM %i WHERE ID = %d', $wpdb->posts, $id));
+    $stored = static fn (): ?string => $wpdb->get_var($wpdb->prepare('SELECT post_content FROM %i WHERE ID = %d', $wpdb->posts, $id));
     $replacement = new UrlReplacement($wpdb);
 
     $counted = $replacement->replace($old, $new);

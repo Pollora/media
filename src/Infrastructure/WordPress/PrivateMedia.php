@@ -126,7 +126,8 @@ final class PrivateMedia
 
         $id = $wpdb->get_var($wpdb->prepare("SELECT post_id FROM %i WHERE meta_key = '_wp_attached_file' AND meta_value = %s LIMIT 1", $wpdb->postmeta, $file));
 
-        return $id !== null && $this->isPrivate((int) $id);
+        // No row and a failed query both read as null: only the first one means the file is not private
+        return $id === null ? $wpdb->last_error !== '' : $this->isPrivate((int) $id);
     }
 
     /**
