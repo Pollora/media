@@ -295,7 +295,8 @@ it('keeps a write that reached the disk when there is no temporary directory for
         echo file_put_contents('pollora://2026/10/photo.jpg', 'bytes');
         PHP, var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true), var_export($this->disk->root, true));
 
-    exec(sprintf('%s -d sys_temp_dir=%s -r %s 2>&1', escapeshellarg(PHP_BINARY), escapeshellarg($this->disk->root.'/missing'), escapeshellarg($script)), $output, $status);
+    // Errors only: the oldest dependencies allowed print deprecations on this PHP
+    exec(sprintf('%s -d error_reporting=%d -d sys_temp_dir=%s -r %s 2>&1', escapeshellarg(PHP_BINARY), E_ERROR, escapeshellarg($this->disk->root.'/missing'), escapeshellarg($script)), $output, $status);
 
     expect($status)->toBe(0, implode("\n", $output))
         ->and(implode('', $output))->toBe('5')
