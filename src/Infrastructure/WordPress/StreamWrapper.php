@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure\WordPress;
 
+use LogicException;
 use Pollora\Media\Domain\Contracts\MediaStorage;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Throwable;
@@ -148,14 +149,20 @@ final class StreamWrapper
             return $this->fail();
         }
 
+        $buffer = fopen('php://temp', 'w+b');
+
+        if ($buffer === false) {
+            return $this->fail();
+        }
+
         $this->key = $key;
-        $this->buffer = fopen('php://temp', 'w+b');
+        $this->buffer = $buffer;
         $kind = $mode[0] ?? 'r';
         $this->writable = $kind !== 'r' || str_contains($mode, '+');
 
         try {
             $copy = self::$copies[$key] ?? null;
-            $exists = $kind !== 'w' && $this->known($key, $copy);
+            $exists = $kind !== 'w' && $this->known(self::$storage, $key, $copy);
 
             if ($kind === 'x' && $exists) {
                 return $this->fail();
@@ -165,12 +172,12 @@ final class StreamWrapper
                 return $this->fail();
             }
 
-            if ((in_array($kind, ['r', 'a', 'c'], true)) && $exists) {
-                $this->load($key, $copy);
+            if ((in_array($kind, ['r', 'a', 'c'], true)) && $exists && ! $this->load(self::$storage, $key, $copy)) {
+                return $this->fail();
             }
 
             if ($kind === 'a') {
-                fseek($this->buffer, 0, SEEK_END);
+                fseek($this->buffer(), 0, SEEK_END);
             }
         } catch (Throwable) {
             return $this->fail();
@@ -183,7 +190,7 @@ final class StreamWrapper
 
     public function stream_read(int $count): string|false
     {
-        return fread($this->buffer, $count);
+        return $count > 0 ? fread($this->buffer(), $count) : '';
     }
 
     public function stream_write(string $data): int
@@ -194,29 +201,29 @@ final class StreamWrapper
 
         $this->dirty = true;
 
-        return (int) fwrite($this->buffer, $data);
+        return (int) fwrite($this->buffer(), $data);
     }
 
     public function stream_eof(): bool
     {
-        return feof($this->buffer);
+        return feof($this->buffer());
     }
 
     public function stream_tell(): int
     {
-        return (int) ftell($this->buffer);
+        return (int) ftell($this->buffer());
     }
 
     public function stream_seek(int $offset, int $whence = SEEK_SET): bool
     {
-        return fseek($this->buffer, $offset, $whence) === 0;
+        return fseek($this->buffer(), $offset, $whence) === 0;
     }
 
     public function stream_truncate(int $size): bool
     {
         $this->dirty = true;
 
-        return ftruncate($this->buffer, $size);
+        return $size >= 0 && ftruncate($this->buffer(), $size);
     }
 
     public function stream_flush(): bool
@@ -234,9 +241,12 @@ final class StreamWrapper
         return false;
     }
 
+    /**
+     * @return array<int|string, int>|false
+     */
     public function stream_stat(): array|false
     {
-        $stat = fstat($this->buffer);
+        $stat = fstat($this->buffer());
 
         return $stat === false ? false : $this->statArray($stat['size'], time(), false);
     }
@@ -409,33 +419,55 @@ final class StreamWrapper
     }
 
     /**
+     * The temporary buffer of the open stream.
+     *
+     * @return resource
+     *
+     * @throws LogicException When no stream is open
+     */
+    private function buffer(): mixed
+    {
+        return is_resource($this->buffer) ? $this->buffer : throw new LogicException('The stream is not open.');
+    }
+
+    /**
      * Whether the file is there: what this request already knows, else the disk.
      */
-    private function known(string $key, ?string $copy): bool
+    private function known(MediaStorage $storage, string $key, ?string $copy): bool
     {
         if ($copy !== null || is_array(self::$stats[$key] ?? false)) {
             return true;
         }
 
-        return self::$storage->exists($key);
+        return $storage->exists($key);
     }
 
     /**
      * Fills the buffer from the local copy when there is one, else from the disk, and remembers a file that is not too big.
+     *
+     * @return bool False when the local copy cannot be opened
      */
-    private function load(string $key, ?string $copy): void
+    private function load(MediaStorage $storage, string $key, ?string $copy): bool
     {
-        $source = $copy !== null ? fopen($copy, 'rb') : self::$storage->readStream($key);
-        stream_copy_to_stream($source, $this->buffer);
+        $buffer = $this->buffer();
+        $source = $copy !== null ? fopen($copy, 'rb') : $storage->readStream($key);
+
+        if ($source === false) {
+            return false;
+        }
+
+        stream_copy_to_stream($source, $buffer);
         fclose($source);
 
-        $size = (int) ftell($this->buffer);
-        rewind($this->buffer);
+        $size = (int) ftell($buffer);
+        rewind($buffer);
 
         if ($copy === null) {
             self::$stats[$key] ??= ['size' => $size, 'mtime' => time()];
             $this->keepCopy($key, $size);
         }
+
+        return true;
     }
 
     /**
@@ -462,10 +494,11 @@ final class StreamWrapper
             return;
         }
 
-        $position = (int) ftell($this->buffer);
-        rewind($this->buffer);
-        stream_copy_to_stream($this->buffer, $handle);
-        fseek($this->buffer, $position);
+        $buffer = $this->buffer();
+        $position = (int) ftell($buffer);
+        rewind($buffer);
+        stream_copy_to_stream($buffer, $handle);
+        fseek($buffer, $position);
         fclose($handle);
 
         self::$copies[$key] = $path;

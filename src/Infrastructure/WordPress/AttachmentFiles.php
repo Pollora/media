@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Pollora\Media\Infrastructure\WordPress;
 
+use Pollora\Media\Infrastructure\Cast;
+
 /**
  * Every file of a media on the disk: the original, each size, the original
  * image of a scaled one, and the files a plugin keeps next to it
@@ -65,6 +67,6 @@ final class AttachmentFiles
     {
         $extra = \apply_filters('pollora/media/attachment_files', [], $attachmentId);
 
-        return array_values(array_unique([...$files, ...array_map(static fn (mixed $path): string => ltrim((string) $path, '/'), is_array($extra) ? $extra : [])]));
+        return array_values(array_unique([...$files, ...array_map(static fn (mixed $path): string => ltrim(Cast::text($path), '/'), is_array($extra) ? $extra : [])]));
     }
 }

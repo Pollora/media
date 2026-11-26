@@ -179,3 +179,38 @@ it('leaves the URL of the media plain while WordPress builds the URL of a size f
         ->and($size[0])->toStartWith('https://bucket.s3.test/2026/10/photo-150x150.jpg?')
         ->and($after)->toStartWith('https://bucket.s3.test/2026/10/photo.jpg?');
 });
+
+it('treats a file as private when the database cannot answer the query', function (): void {
+    $previous = $GLOBALS['wpdb'] ?? null;
+    // get_var() answers null both for no row and for a query that failed: last_error tells them apart
+    $GLOBALS['wpdb'] = new class
+    {
+        public string $postmeta = 'wp_postmeta';
+
+        public string $last_error = '';
+
+        public string $failure = 'You have an error in your SQL syntax';
+
+        public function prepare(string $query, mixed ...$values): string
+        {
+            return $query;
+        }
+
+        public function get_var(string $query): ?string
+        {
+            $this->last_error = $this->failure;
+
+            return null;
+        }
+    };
+
+    try {
+        expect($this->private->isPrivateFile('2026/10/photo.jpg'))->toBeTrue();
+
+        $GLOBALS['wpdb']->failure = '';
+
+        expect($this->private->isPrivateFile('2026/10/photo.jpg'))->toBeFalse();
+    } finally {
+        $GLOBALS['wpdb'] = $previous;
+    }
+});

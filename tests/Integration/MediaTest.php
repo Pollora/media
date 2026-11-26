@@ -5,6 +5,7 @@ declare(strict_types=1);
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Infrastructure\WordPress\FocalPoints;
 use Pollora\Media\Infrastructure\WordPress\ThumbnailRoute;
+use Pollora\Media\Infrastructure\WordPress\UrlReplacement;
 use Pollora\Media\Tests\Integration\Support\Library;
 
 /**
@@ -159,4 +160,33 @@ it('replaces the legacy URLs of the library in the content, and tells from the t
 
     expect($private->isPrivateFile($file))->toBeTrue()
         ->and(get_post_meta($id, '_pollora_media_private', true))->toBe('1');
+});
+
+it('counts then replaces a media URL in the tables of the database, serialized values included', function (): void {
+    /** @var wpdb $wpdb */
+    global $wpdb;
+
+    $old = 'https://replace.example.test/'.uniqid().'/uploads';
+    $new = Library::URL;
+    $id = wp_insert_post(['post_title' => 'URL replacement', 'post_status' => 'draft', 'post_content' => '<img src="'.$old.'/a.jpg">']);
+    add_post_meta($id, '_pollora_probe', ['src' => $old.'/b.jpg']);
+    $stored = static fn (): ?string => $wpdb->get_var($wpdb->prepare('SELECT post_content FROM %i WHERE ID = %d', $wpdb->posts, $id));
+    $replacement = new UrlReplacement($wpdb);
+
+    $counted = $replacement->replace($old, $new);
+
+    expect($wpdb->last_error)->toBe('')
+        ->and($counted['posts.post_content'])->toBe(1)
+        ->and($counted['postmeta.meta_value'])->toBe(1)
+        // a dry run writes nothing
+        ->and($stored())->toContain($old.'/a.jpg');
+
+    $changed = $replacement->replace($old, $new, dryRun: false);
+
+    expect($wpdb->last_error)->toBe('')
+        ->and($changed)->toBe($counted)
+        ->and($stored())->toBe('<img src="'.$new.'/a.jpg">')
+        ->and(get_post_meta($id, '_pollora_probe', true))->toBe(['src' => $new.'/b.jpg']);
+
+    wp_delete_post($id, true);
 });

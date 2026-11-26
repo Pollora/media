@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Pollora\Media\Infrastructure\WordPress;
 
 use Pollora\Media\Domain\Services\SerializedReplacer;
+use Pollora\Media\Infrastructure\Cast;
+use stdClass;
 
 /**
  * Replaces the base URL of the media library in the database after a
@@ -31,7 +33,7 @@ final class UrlReplacement
     private readonly SerializedReplacer $replacer;
 
     /**
-     * @param  object  $database  WordPress's `$wpdb`
+     * @param  \wpdb  $database  WordPress's `$wpdb`
      */
     public function __construct(private readonly object $database)
     {
@@ -72,19 +74,27 @@ final class UrlReplacement
 
             while (true) {
                 $rows = $this->database->get_results($this->database->prepare(
-                    "SELECT {$id} AS id, {$column} AS value FROM {$name} WHERE {$id} > %d AND {$column} LIKE %s ORDER BY {$id} ASC LIMIT %d",
+                    'SELECT %i AS id, %i AS value FROM %i WHERE %i > %d AND %i LIKE %s ORDER BY %i ASC LIMIT %d',
+                    $id,
+                    $column,
+                    $name,
+                    $id,
                     $last,
+                    $column,
                     $like,
+                    $id,
                     self::BATCH,
                 ));
 
-                if (! is_array($rows) || $rows === []) {
+                $rows = array_filter((array) $rows, static fn (mixed $row): bool => $row instanceof stdClass);
+
+                if ($rows === []) {
                     break;
                 }
 
                 foreach ($rows as $row) {
-                    $last = (int) $row->id;
-                    $new = $this->replacer->replace((string) $row->value, $search, $replace);
+                    $last = Cast::integer($row->id);
+                    $new = $this->replacer->replace(Cast::text($row->value), $search, $replace);
 
                     if ($new === $row->value) {
                         continue;

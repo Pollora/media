@@ -8,6 +8,7 @@ use InvalidArgumentException;
 use Pollora\Media\Application\Services\SizePruner;
 use Pollora\Media\Application\Services\ThumbnailExporter;
 use Pollora\Media\Domain\Contracts\ThumbnailDriver;
+use Pollora\Media\Infrastructure\Cast;
 use RuntimeException;
 use WP_CLI;
 
@@ -56,7 +57,7 @@ final readonly class ThumbsCommand
         }
 
         try {
-            $report = $this->warmer->warm($assoc['size'] ?? null, $assoc['since'] ?? null);
+            $report = $this->warmer->warm(Cast::optionalText($assoc['size'] ?? null), Cast::optionalText($assoc['since'] ?? null));
         } catch (InvalidArgumentException $invalidArgumentException) {
             WP_CLI::error($invalidArgumentException->getMessage());
 
@@ -117,7 +118,7 @@ final readonly class ThumbsCommand
      */
     public function export(array $args, array $assoc): void
     {
-        $driver = (string) ($assoc['driver'] ?? $this->exporter->configuredDriver());
+        $driver = Cast::text($assoc['driver'] ?? $this->exporter->configuredDriver());
         $execute = isset($assoc['execute']);
 
         try {

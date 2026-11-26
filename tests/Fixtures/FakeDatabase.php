@@ -38,6 +38,21 @@ final class FakeDatabase
      */
     public function prepare(string $query, mixed ...$values): array
     {
+        // As wpdb does, `%i` takes its identifier at once; the other placeholders keep their values
+        $kept = [];
+        $query = preg_replace_callback('/%[ids]/', function (array $placeholder) use (&$values, &$kept): string {
+            $value = array_shift($values);
+
+            if ($placeholder[0] === '%i') {
+                return (string) $value;
+            }
+
+            $kept[] = $value;
+
+            return $placeholder[0];
+        }, $query);
+        $values = $kept;
+
         return ['query' => $query, 'values' => $values];
     }
 

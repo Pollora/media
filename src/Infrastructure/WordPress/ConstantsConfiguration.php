@@ -6,12 +6,14 @@ namespace Pollora\Media\Infrastructure\WordPress;
 
 use Closure;
 use League\Flysystem\Filesystem;
+use League\Flysystem\FilesystemAdapter;
 use League\Flysystem\FilesystemOperator;
 use League\Flysystem\Local\LocalFilesystemAdapter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
 use Pollora\Media\Domain\Exceptions\InvalidMediaConfigurationException;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
+use Pollora\Media\Infrastructure\Cast;
 
 /**
  * The default adapter, for WordPress without Laravel: a classic theme, a
@@ -55,10 +57,10 @@ final class ConstantsConfiguration
         $legacy = is_string($legacy) ? array_map(trim(...), explode(',', $legacy)) : (array) $legacy;
 
         return new MediaConfig(
-            (string) ($this->read('POLLORA_MEDIA_URL') ?? rtrim((string) $this->read('WP_CONTENT_URL'), '/').'/uploads'),
-            array_values(array_filter(array_map(strval(...), $legacy), static fn (string $url): bool => $url !== '')),
-            (string) ($this->read('POLLORA_MEDIA_CACHE_CONTROL') ?? 'public, max-age=31536000, immutable'),
-            (string) ($this->read('POLLORA_MEDIA_PRIVATE_EXPIRY') ?? '+6 hours'),
+            Cast::text($this->read('POLLORA_MEDIA_URL') ?? rtrim(Cast::text($this->read('WP_CONTENT_URL')), '/').'/uploads'),
+            array_values(array_filter(array_map(Cast::text(...), $legacy), static fn (string $url): bool => $url !== '')),
+            Cast::text($this->read('POLLORA_MEDIA_CACHE_CONTROL') ?? 'public, max-age=31536000, immutable'),
+            Cast::text($this->read('POLLORA_MEDIA_PRIVATE_EXPIRY') ?? '+6 hours'),
             (bool) ($this->read('POLLORA_MEDIA_ASYNC_THUMBNAILS') ?? false),
         );
     }
@@ -68,26 +70,26 @@ final class ConstantsConfiguration
         $defaults = new ThumbnailLimits;
 
         return new ThumbnailLimits(
-            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS') ?? $defaults->maxPixels),
-            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_BYTES') ?? $defaults->maxBytes),
-            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_CONCURRENCY') ?? $defaults->concurrency),
-            (int) ($this->read('POLLORA_MEDIA_THUMBNAILS_WAIT') ?? $defaults->wait),
+            Cast::integer($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_PIXELS') ?? $defaults->maxPixels),
+            Cast::integer($this->read('POLLORA_MEDIA_THUMBNAILS_MAX_BYTES') ?? $defaults->maxBytes),
+            Cast::integer($this->read('POLLORA_MEDIA_THUMBNAILS_CONCURRENCY') ?? $defaults->concurrency),
+            Cast::integer($this->read('POLLORA_MEDIA_THUMBNAILS_WAIT') ?? $defaults->wait),
         );
     }
 
     public function thumbnailDriver(): ThumbnailDriverSettings
     {
-        $source = (string) ($this->read('POLLORA_MEDIA_IMGPROXY_SOURCE') ?? 'url');
+        $source = Cast::text($this->read('POLLORA_MEDIA_IMGPROXY_SOURCE') ?? 'url');
         $bucket = $this->read('POLLORA_MEDIA_BUCKET');
 
         return new ThumbnailDriverSettings(
-            (string) ($this->read('POLLORA_MEDIA_THUMBNAILS_DRIVER') ?? ThumbnailDriverSettings::POLLORA),
+            Cast::text($this->read('POLLORA_MEDIA_THUMBNAILS_DRIVER') ?? ThumbnailDriverSettings::POLLORA),
             $this->optional('POLLORA_MEDIA_BUNNY_PULL_ZONE'),
             $this->optional('POLLORA_MEDIA_BUNNY_API_KEY'),
             $this->optional('POLLORA_MEDIA_IMGPROXY_URL'),
             $this->optional('POLLORA_MEDIA_IMGPROXY_KEY'),
             $this->optional('POLLORA_MEDIA_IMGPROXY_SALT'),
-            (int) ($this->read('POLLORA_MEDIA_IMGPROXY_SIGNATURE_SIZE') ?? 32),
+            Cast::integer($this->read('POLLORA_MEDIA_IMGPROXY_SIGNATURE_SIZE') ?? 32),
             $source,
             $source === 's3' && is_string($bucket) && $bucket !== '' ? $bucket : null,
         );
@@ -95,7 +97,7 @@ final class ConstantsConfiguration
 
     public function localRoot(): string
     {
-        return (string) ($this->read('POLLORA_MEDIA_ROOT') ?? rtrim((string) $this->read('WP_CONTENT_DIR'), '/').'/uploads');
+        return Cast::text($this->read('POLLORA_MEDIA_ROOT') ?? rtrim(Cast::text($this->read('WP_CONTENT_DIR')), '/').'/uploads');
     }
 
     /**
@@ -109,7 +111,7 @@ final class ConstantsConfiguration
             return $provided;
         }
 
-        return match ((string) ($this->read('POLLORA_MEDIA_DRIVER') ?? 'local')) {
+        return match (Cast::text($this->read('POLLORA_MEDIA_DRIVER') ?? 'local')) {
             'local' => new Filesystem(new LocalFilesystemAdapter($this->localRoot())),
             's3' => $this->s3(),
             default => throw InvalidMediaConfigurationException::unknownDriver($this->read('POLLORA_MEDIA_DRIVER')),
@@ -137,12 +139,14 @@ final class ConstantsConfiguration
             'endpoint' => $this->read('POLLORA_MEDIA_ENDPOINT'),
             'use_path_style_endpoint' => $this->read('POLLORA_MEDIA_PATH_STYLE') === null ? null : (bool) $this->read('POLLORA_MEDIA_PATH_STYLE'),
             'credentials' => $this->read('POLLORA_MEDIA_KEY') === null ? null : [
-                'key' => (string) $this->read('POLLORA_MEDIA_KEY'),
-                'secret' => (string) $this->read('POLLORA_MEDIA_SECRET'),
+                'key' => Cast::text($this->read('POLLORA_MEDIA_KEY')),
+                'secret' => Cast::text($this->read('POLLORA_MEDIA_SECRET')),
             ],
         ], static fn (mixed $value): bool => $value !== null);
 
-        return new Filesystem(new $adapter(new $client($options), $bucket));
+        $disk = new $adapter(new $client($options), $bucket);
+
+        return $disk instanceof FilesystemAdapter ? new Filesystem($disk) : throw InvalidMediaConfigurationException::missingS3Package();
     }
 
     private function read(string $name): mixed
@@ -154,6 +158,6 @@ final class ConstantsConfiguration
     {
         $value = $this->read($name);
 
-        return $value === null || $value === '' ? null : (string) $value;
+        return $value === null || $value === '' ? null : Cast::text($value);
     }
 }

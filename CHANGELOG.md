@@ -7,8 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- PHPStan runs at level 10. A value without a type from WordPress, WP-CLI, a filter or a constant that is neither a scalar nor stringable now reads as `''` or `0`
+- `UrlReplacement` and the private media lookup pass table and column names to `$wpdb->prepare()` as `%i` identifiers (WordPress 6.2 or later)
+
 ### Fixed
 
+- A file is treated as private when the database query that looks its media up fails, instead of public
 - A personal data export archive that cannot be read is no longer copied to the disk as an empty file before a `TypeError`: `PrivacyExportFailedException` is thrown and the disk is left alone
 - A write through `pollora://` no longer ends in a `TypeError` when the temporary directory cannot be written: the file is stored, only its local copy is given up
 

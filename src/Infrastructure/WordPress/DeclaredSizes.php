@@ -14,6 +14,7 @@ use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Services\SizeGeometry;
+use Pollora\Media\Infrastructure\Cast;
 use Pollora\Media\Infrastructure\PolloraThumbnailDriver;
 use Throwable;
 
@@ -180,14 +181,20 @@ final class DeclaredSizes
      */
     public function remake(mixed $metadata, int $attachmentId): mixed
     {
-        if (! is_array($metadata) || $this->sizes->isEmpty() || ! $this->isImage($metadata)) {
+        if (! is_array($metadata) || $this->sizes->isEmpty()) {
+            return $metadata;
+        }
+
+        $metadata = $this->named($metadata);
+
+        if (! $this->isImage($metadata)) {
             return $metadata;
         }
 
         $stored = \wp_get_attachment_metadata($attachmentId);
-        $previous = is_array($stored) ? (string) ($stored['file'] ?? '') : '';
+        $previous = is_array($stored) ? Cast::text($stored['file'] ?? '') : '';
 
-        if ($previous === '' || $previous === (string) $metadata['file']) {
+        if ($previous === '' || $previous === Cast::text($metadata['file'])) {
             return $metadata;
         }
 
@@ -219,12 +226,12 @@ final class DeclaredSizes
         }
 
         if ($this->isGif($metadata)) {
-            return [$this->url((string) $metadata['file']), (int) $metadata['width'], (int) $metadata['height'], false];
+            return [$this->url((string) ($metadata['file'] ?? '')), (int) ($metadata['width'] ?? 0), (int) ($metadata['height'] ?? 0), false];
         }
 
-        [$width, $height] = $this->geometry->dimensions($spec, (int) $metadata['width'], (int) $metadata['height']);
+        [$width, $height] = $this->geometry->dimensions($spec, (int) ($metadata['width'] ?? 0), (int) ($metadata['height'] ?? 0));
 
-        return [$driver->url((string) $metadata['file'], $spec, (int) $metadata['width'], (int) $metadata['height']), $width, $height, true];
+        return [$driver->url((string) ($metadata['file'] ?? ''), $spec, (int) ($metadata['width'] ?? 0), (int) ($metadata['height'] ?? 0)), $width, $height, true];
     }
 
     /**
@@ -260,8 +267,8 @@ final class DeclaredSizes
         $built = [];
 
         foreach ($candidates as $candidate) {
-            [$width] = $this->geometry->dimensions($candidate, (int) $imageMeta['width'], (int) $imageMeta['height']);
-            $built[$width] = ['url' => $driver->url((string) $imageMeta['file'], $candidate, (int) $imageMeta['width'], (int) $imageMeta['height']), 'descriptor' => 'w', 'value' => $width];
+            [$width] = $this->geometry->dimensions($candidate, Cast::integer($imageMeta['width']), Cast::integer($imageMeta['height']));
+            $built[$width] = ['url' => $driver->url(Cast::text($imageMeta['file']), $candidate, Cast::integer($imageMeta['width']), Cast::integer($imageMeta['height'])), 'descriptor' => 'w', 'value' => $width];
         }
 
         ksort($built);
@@ -283,16 +290,16 @@ final class DeclaredSizes
 
         $spec = $spec->focusedOn($focal);
 
-        $original = (string) $metadata['file'];
+        $original = Cast::text($metadata['file']);
         $destination = $this->fileOf($metadata, $spec);
-        [$width, $height] = $this->geometry->dimensions($spec, (int) $metadata['width'], (int) $metadata['height']);
+        [$width, $height] = $this->geometry->dimensions($spec, Cast::integer($metadata['width']), Cast::integer($metadata['height']));
 
         try {
             if ($this->storage->exists($destination)) {
                 return ['file' => basename($destination), 'width' => $width, 'height' => $height, 'mime-type' => $this->mime($destination), 'filesize' => $this->storage->size($destination)];
             }
 
-            $made = $this->processor->make($original, $destination, $spec, (int) $metadata['width'], (int) $metadata['height']);
+            $made = $this->processor->make($original, $destination, $spec, Cast::integer($metadata['width']), Cast::integer($metadata['height']));
         } catch (Throwable $throwable) {
             \error_log(sprintf('pollora/media: size "%s" of %s was not made: %s', $spec->name, $original, $throwable->getMessage()));
 
@@ -385,11 +392,30 @@ final class DeclaredSizes
             $entry = $this->make($metadata, $spec, $focal);
 
             if ($entry !== null) {
-                $metadata['sizes'][$spec->name] = $entry;
+                $sizes = is_array($metadata['sizes'] ?? null) ? $metadata['sizes'] : [];
+                $sizes[$spec->name] = $entry;
+                $metadata['sizes'] = $sizes;
             }
         }
 
         return $metadata;
+    }
+
+    /**
+     * Attachment metadata, whose keys are names: the same array, typed as such.
+     *
+     * @param  array<array-key, mixed>  $metadata
+     * @return array<string, mixed>
+     */
+    private function named(array $metadata): array
+    {
+        $named = [];
+
+        foreach ($metadata as $name => $value) {
+            $named[(string) $name] = $value;
+        }
+
+        return $named;
     }
 
     /**
@@ -429,7 +455,7 @@ final class DeclaredSizes
      */
     private function fileOf(array $metadata, ImageSizeSpec $spec): string
     {
-        return $this->sizes->names()->for((string) $metadata['file'], $spec, (int) $metadata['width'], (int) $metadata['height']);
+        return $this->sizes->names()->for(Cast::text($metadata['file']), $spec, Cast::integer($metadata['width']), Cast::integer($metadata['height']));
     }
 
     /**
@@ -437,7 +463,7 @@ final class DeclaredSizes
      */
     private function isImage(array $metadata): bool
     {
-        $file = (string) ($metadata['file'] ?? '');
+        $file = Cast::text($metadata['file'] ?? '');
         $extension = strtolower(pathinfo($file, PATHINFO_EXTENSION));
 
         return $file !== '' && isset($metadata['width'], $metadata['height']) && (in_array($extension, self::IMAGE_EXTENSIONS, true) || $extension === 'gif');
@@ -450,7 +476,7 @@ final class DeclaredSizes
      */
     private function isGif(array $metadata): bool
     {
-        return strtolower(pathinfo((string) $metadata['file'], PATHINFO_EXTENSION)) === 'gif';
+        return strtolower(pathinfo(Cast::text($metadata['file']), PATHINFO_EXTENSION)) === 'gif';
     }
 
     private function url(string $file): string
