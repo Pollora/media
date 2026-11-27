@@ -147,3 +147,27 @@ it('passes on the reason when the file cannot be saved', function (): void {
 
     expect(fn () => (new WordPressImageProcessor)->make('2026/10/photo.jpg', 'x.webp', $spec, 3000, 2000))->toThrow(ImageProcessingFailedException::class, 'boom');
 });
+
+it('opens the original through the wrapper and asks the editor for the format it will write', function (): void {
+    $this->sizes->add('card')->cover(600, 400)->webp(75);
+    $opened = null;
+    $asked = null;
+    Functions\when('wp_get_image_editor')->alias(function (string $path) use (&$opened): object {
+        $opened = $path;
+
+        return $this->editor;
+    });
+    Functions\when('wp_image_editor_supports')->alias(function (array $args) use (&$asked): bool {
+        $asked = $args;
+
+        return true;
+    });
+    $this->editor->saveResult = ['width' => '600', 'height' => '400', 'mime-type' => 'image/webp'];
+
+    $made = (new WordPressImageProcessor)->make('2026/10/photo.jpg', '2026/10/photo-card.webp', $this->sizes->get('card'), 3000, 2000);
+
+    expect($opened)->toBe('pollora://uploads/2026/10/photo.jpg')
+        ->and($asked)->toBe(['mime_type' => 'image/webp'])
+        ->and($made['width'])->toBe(600)
+        ->and($made['height'])->toBe(400);
+});

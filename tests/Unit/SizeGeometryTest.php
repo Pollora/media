@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Enums\Fit;
+use Pollora\Media\Domain\Models\FocalPoint;
 use Pollora\Media\Domain\Models\ImageSizeSpec;
 use Pollora\Media\Domain\Services\SizeGeometry;
 
@@ -111,4 +112,52 @@ it('does not resize an original whose dimensions are unknown, and never divides 
 it('keeps the whole of an original whose dimensions are unknown as the region of a cover', function (): void {
     expect((new SizeGeometry)->coverRegion(0, 0, 600, 400))->toBe(['x' => 0, 'y' => 0, 'width' => 0, 'height' => 0])
         ->and((new SizeGeometry)->coverRegion(800, 0, 600, 400))->toBe(['x' => 0, 'y' => 0, 'width' => 800, 'height' => 0]);
+});
+
+/*
+ * The URL of a size states its width and height, and the route refuses a name whose figures differ:
+ * the rounding is part of the contract with the files already made.
+ */
+it('rounds the dimensions of a size to the nearest pixel, never to zero', function (ImageSizeSpec $spec, array $original, array $expected): void {
+    expect((new SizeGeometry)->dimensions($spec, ...$original))->toBe($expected);
+})->with([
+    'scale, rounding down' => [new ImageSizeSpec('s', Fit::Scale, 100, null), [300, 100], [100, 33]],
+    'scale, rounding up' => [new ImageSizeSpec('s', Fit::Scale, 100, null), [300, 200], [100, 67]],
+    'scale by height, width rounding down' => [new ImageSizeSpec('s', Fit::Scale, null, 100), [100, 300], [33, 100]],
+    'scale by height, width rounding up' => [new ImageSizeSpec('s', Fit::Scale, null, 100), [200, 300], [67, 100]],
+    'scale to the tighter of width and height' => [new ImageSizeSpec('s', Fit::Scale, 100, 100), [400, 200], [100, 50]],
+    'scale to the tighter of height and width' => [new ImageSizeSpec('s', Fit::Scale, 100, 100), [200, 400], [50, 100]],
+    'a very wide image keeps a pixel of height' => [new ImageSizeSpec('s', Fit::Scale, 10, null), [1000, 1], [10, 1]],
+    'a very tall image keeps a pixel of width' => [new ImageSizeSpec('s', Fit::Scale, null, 10), [1, 1000], [1, 10]],
+    'an original of one pixel is scaled' => [new ImageSizeSpec('s', Fit::Scale, 10, null, upscale: true), [1, 1], [10, 10]],
+    'unknown height' => [new ImageSizeSpec('s', Fit::Scale, 10, null), [100, -1], [100, 0]],
+    'unknown width' => [new ImageSizeSpec('s', Fit::Contain, 10, 10), [-1, 100], [0, 100]],
+    'a small cover, rounding down' => [new ImageSizeSpec('s', Fit::Cover, 300, 100), [100, 100], [100, 33]],
+    'a small cover, rounding up' => [new ImageSizeSpec('s', Fit::Cover, 300, 200), [100, 100], [100, 67]],
+    'a small cover, width rounding down' => [new ImageSizeSpec('s', Fit::Cover, 100, 300), [100, 100], [33, 100]],
+    'a small cover, width rounding up' => [new ImageSizeSpec('s', Fit::Cover, 200, 300), [100, 100], [67, 100]],
+    'a cover of a sliver keeps a pixel of width' => [new ImageSizeSpec('s', Fit::Cover, 100, 1000), [100, 1], [1, 1]],
+    'a cover of a sliver keeps a pixel of height' => [new ImageSizeSpec('s', Fit::Cover, 1000, 100), [1, 100], [1, 1]],
+]);
+
+it('rounds the region of a cover to the nearest pixel', function (array $original, array $box, array $expected): void {
+    $region = (new SizeGeometry)->coverRegion(...$original, ...$box);
+
+    expect([$region['width'], $region['height']])->toBe($expected);
+})->with([
+    'width rounded down' => [[1000, 100], [100, 30], [333, 100]],
+    'width rounded up' => [[1000, 200], [100, 30], [667, 200]],
+    'height rounded down' => [[100, 1000], [300, 100], [100, 33]],
+    'height rounded up' => [[200, 1000], [300, 100], [200, 67]],
+]);
+
+it('takes nothing from an original whose dimensions are negative', function (): void {
+    expect((new SizeGeometry)->coverRegion(-5, -7, 10, 10))->toBe(['x' => 0, 'y' => 0, 'width' => 0, 'height' => 0]);
+});
+
+it('centres a crop on the focal point to the nearest pixel', function (): void {
+    $region = (new SizeGeometry)->coverRegion(1000, 100, 100, 100, focal: new FocalPoint(0.504, 0.5));
+    $half = (new SizeGeometry)->coverRegion(1000, 101, 101, 101, focal: new FocalPoint(0.5, 0.5));
+
+    expect($region['x'])->toBe(454)->and($half['x'])->toBe(450);
 });

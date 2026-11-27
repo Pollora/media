@@ -7,6 +7,7 @@ use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Application\Services\SizePruner;
 use Pollora\Media\Application\Services\ThumbnailExporter;
 use Pollora\Media\Application\Services\ThumbnailLimits;
+use Pollora\Media\Domain\Enums\Anchor;
 use Pollora\Media\Domain\Models\MediaConfig;
 use Pollora\Media\Domain\Models\ThumbnailDriverSettings;
 use Pollora\Media\Infrastructure\ThumbnailDrivers;
@@ -106,4 +107,63 @@ it('prints the imgproxy configuration, with the warnings once each', function ()
 
 it('stops with the message when there is nothing to export for the driver', function (): void {
     expect(fn () => ($this->command)()->export([], []))->toThrow(RuntimeException::class, 'The pollora driver makes the sizes itself: there is nothing to export.');
+});
+
+it('warms only the size and the images asked for', function (): void {
+    $queries = [];
+    Functions\when('get_posts')->alias(function (array $args) use (&$queries): array {
+        $queries[] = $args;
+
+        return [];
+    });
+
+    ($this->command)()->warm([], ['since' => '2026-01-01']);
+
+    expect($queries[0]['date_query'])->toBe([['after' => '2026-01-01']])
+        ->and(fn () => ($this->command)()->warm([], ['size' => 'nope']))->toThrow(RuntimeException::class, '"nope" is not declared');
+});
+
+it('exits with the code 1 when a file could not be made', function (): void {
+    $declared = new DeclaredSizes($this->sizes, $this->config, $this->disk->storage, new FakeImageProcessor($this->disk->storage, failing: 'card'));
+    $command = new ThumbsCommand(
+        new SizeWarmer($declared, $this->disk->storage),
+        new SizePruner($this->disk->storage, $this->sizes),
+        ThumbnailDrivers::make(new ThumbnailDriverSettings, $this->sizes, $this->config),
+        new ThumbnailExporter($this->sizes, new ThumbnailDriverSettings, new ThumbnailLimits, $this->config),
+    );
+    $log = tempnam(sys_get_temp_dir(), 'media-log');
+    $previous = ini_set('error_log', $log);
+
+    try {
+        expect(fn () => $command->warm([], []))->toThrow(RuntimeException::class, 'WP_CLI::halt: 1');
+    } finally {
+        ini_set('error_log', (string) $previous);
+        unlink($log);
+    }
+});
+
+it('exports the driver asked for rather than the configured one, and says a Bunny dry run is one', function (): void {
+    ($this->command)()->export([], ['driver' => 'imgproxy']);
+    expect(WP_CLI::messages('line'))->toContain('IMGPROXY_ONLY_PRESETS=true')->and(WP_CLI::messages('log'))->toBe([]);
+
+    WP_CLI::reset();
+    ($this->command)($this->bunny)->export([], []);
+    expect(WP_CLI::messages('log'))->toBe(['This was a dry run. Add --execute to write the classes.']);
+
+    WP_CLI::reset();
+    ($this->command)($this->bunny)->export([], ['execute' => true]);
+    expect(WP_CLI::messages('log'))->toBe([])->and(WP_CLI::messages('success'))->toBe(['1 class(es) created, 0 updated.']);
+
+    WP_CLI::reset();
+    ($this->command)($this->bunny)->export([], []);
+    expect(WP_CLI::messages('log'))->toBe([]);
+});
+
+it('prints each warning of an export once', function (): void {
+    $this->sizes->add('top')->cover(100, 100, Anchor::Top);
+
+    ($this->command)($this->bunny)->export([], []);
+    $warnings = WP_CLI::messages('warning');
+
+    expect($warnings)->not->toBe([])->and($warnings)->toBe(array_values(array_unique($warnings)));
 });

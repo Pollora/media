@@ -151,3 +151,14 @@ it('does not count an excluded file as already there or failed', function (): vo
 
     expect($report->skipped)->toBe([])->and($report->failed)->toBe([]);
 });
+
+it('tells which files were already there, as the progress', function (): void {
+    $this->to->storage->write('top.txt', 't');
+    $outcomes = [];
+
+    $this->migrator->migrate(dryRun: true, progress: function (string $path, string $outcome) use (&$outcomes): void {
+        $outcomes[$path] = $outcome;
+    });
+
+    expect($outcomes['top.txt'])->toBe('skip')->and($outcomes['2026/10/a.jpg'])->toBe('copy');
+});

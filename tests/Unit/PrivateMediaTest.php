@@ -16,7 +16,11 @@ beforeEach(function (): void {
     $this->storage = new SigningStorage($this->disk->storage);
     $this->config = new MediaConfig('https://media.client.fr', [], 'public, max-age=60', '+2 hours');
     $this->meta = [];
-    Functions\when('get_post_meta')->alias(fn (int $id, string $key, bool $single = false) => $this->meta[$id][$key] ?? '');
+    Functions\when('get_post_meta')->alias(function (int $id, string $key, bool $single = false): mixed {
+        $value = $this->meta[$id][$key] ?? '';
+
+        return $single ? $value : ($value === '' ? [] : [$value]);
+    });
     Functions\when('update_post_meta')->alias(function (int $id, string $key, mixed $value): bool {
         $this->meta[$id][$key] = $value;
 
@@ -214,3 +218,100 @@ it('treats a file as private when the database cannot answer the query', functio
         $GLOBALS['wpdb'] = $previous;
     }
 });
+
+/** A `$wpdb` that finds a media by its file, and answers the id as a string, as MySQL does. */
+function databaseFinding(?string $id): object
+{
+    return new class($id)
+    {
+        public string $postmeta = 'wp_postmeta';
+
+        public string $last_error = '';
+
+        public function __construct(private readonly ?string $id) {}
+
+        public function prepare(string $query, mixed ...$values): string
+        {
+            return $query;
+        }
+
+        public function get_var(string $query): ?string
+        {
+            return $this->id;
+        }
+    };
+}
+
+it('knows from the path of its file that a media is private', function (): void {
+    $previous = $GLOBALS['wpdb'] ?? null;
+    $this->meta[7][PrivateMedia::META] = '1';
+
+    try {
+        $GLOBALS['wpdb'] = databaseFinding('7');
+        expect($this->private->isPrivateFile('2026/10/photo.jpg'))->toBeTrue();
+
+        $GLOBALS['wpdb'] = databaseFinding('8');
+        expect($this->private->isPrivateFile('2026/10/other.jpg'))->toBeFalse();
+    } finally {
+        $GLOBALS['wpdb'] = $previous;
+    }
+});
+
+it('treats every file as private while WordPress has no database to ask', function (): void {
+    $previous = $GLOBALS['wpdb'] ?? null;
+    $GLOBALS['wpdb'] = null;
+
+    try {
+        expect($this->private->isPrivateFile('2026/10/photo.jpg'))->toBeTrue();
+    } finally {
+        $GLOBALS['wpdb'] = $previous;
+    }
+});
+
+it('accepts any truthy answer of the is_private filter', function (mixed $answer, bool $private): void {
+    Filters\expectApplied('pollora/media/is_private')->andReturn($answer);
+
+    expect($this->private->isPrivate(7))->toBe($private);
+})->with([
+    'a number' => [1, true],
+    'a string' => ['yes', true],
+    'nothing' => [null, false],
+]);
+
+it('signs nothing of a public media: not the sources of its srcset, not its image size', function (): void {
+    $sources = [150 => ['url' => 'https://media.client.fr/2026/10/photo-150x150.jpg', 'descriptor' => 'w', 'value' => 150]];
+    $image = ['https://media.client.fr/2026/10/photo-150x150.jpg', 150, 150, true];
+
+    expect($this->private->srcset($sources, [], '', [], 7))->toBe($sources)
+        ->and($this->private->imageSrc($image, 7))->toBe($image)
+        ->and($this->storage->signed)->toBe(0);
+});
+
+it('has nothing to sign for a private media without sources', function (): void {
+    $this->meta[7][PrivateMedia::META] = '1';
+
+    expect($this->private->srcset(false, [], '', [], 7))->toBeFalse()
+        ->and($this->private->url(false, 7))->toBeFalse();
+});
+
+it('lists each file once, whatever the shape of the metadata and of what a plugin adds', function (): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn([
+        'file' => 'photo.jpg',
+        'sizes' => ['broken' => 'not a size', 'nameless' => ['width' => 1], 'numbered' => ['file' => 12], 'a' => ['file' => 'photo-1x1.jpg'], 'b' => ['file' => 'photo-1x1.jpg']],
+    ]);
+    Filters\expectApplied('pollora/media/attachment_files')->andReturn(['/photo.webp', 'photo.jpg']);
+
+    expect((new AttachmentFiles(fn (array $metadata, int $id): array => ['photo-card.webp']))->for(7))
+        ->toBe(['photo.jpg', 'photo-1x1.jpg', 'photo-card.webp', 'photo.webp']);
+});
+
+it('still lists what a plugin declares for a media without metadata', function (mixed $metadata, mixed $declared, array $files): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn($metadata);
+    Filters\expectApplied('pollora/media/attachment_files')->andReturn($declared);
+
+    expect((new AttachmentFiles)->for(7))->toBe($files);
+})->with([
+    'no metadata' => [false, ['docs/a.pdf'], ['docs/a.pdf']],
+    'no file' => [['sizes' => ['a' => ['file' => 'x.jpg']]], [], []],
+    'a filter that answers nonsense' => [false, 'docs/a.pdf', []],
+]);

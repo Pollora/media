@@ -215,3 +215,25 @@ it('replaces the old URL with the public URL when it is executed', function (): 
     expect(WP_CLI::messages('log'))->toContain('Replaced 1 row(s) in posts.post_content')
         ->and($GLOBALS['wpdb']->tables['wp_posts'][1]['post_content'])->toBe('<img src="https://media.client.fr/a.jpg">');
 });
+
+it('changes the visibility of the media that was named', function (): void {
+    $changed = [];
+    Functions\when('update_post_meta')->alias(function (int $id) use (&$changed): bool {
+        $changed[] = $id;
+
+        return true;
+    });
+    $this->disk->storage->write('2026/10/photo.jpg', 'x');
+    Functions\when('wp_get_attachment_metadata')->justReturn(['file' => '2026/10/photo.jpg']);
+
+    ($this->command)()->visibility(['7'], ['private' => true]);
+
+    expect($changed)->toBe([7]);
+});
+
+it('leaves out every excluded pattern, however it was spaced', function (): void {
+    ($this->command)()->migrate([], ['execute' => true, 'exclude' => ' nothing/* , wc-logs/* ,']);
+
+    expect($this->disk->storage->exists('2026/10/photo.jpg'))->toBeTrue()
+        ->and($this->disk->storage->exists('wc-logs/today.log'))->toBeFalse();
+});

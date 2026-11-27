@@ -64,11 +64,17 @@ final class FakeDatabase
     {
         preg_match('/SELECT \w+ AS id, (\w+) AS value FROM (\w+) /', $prepared['query'], $found);
         [$last, $like, $limit] = $prepared['values'];
-        $needle = stripslashes(trim((string) $like, '%'));
+        // LIKE as MySQL reads it: `%` any run of characters, `_` any one, a backslash before one of them for itself
+        preg_match_all('/\\\\(.)|(%)|(_)|(.)/s', (string) $like, $tokens, PREG_SET_ORDER);
+        $pattern = implode('', array_map(static fn (array $token): string => match (true) {
+            ($token[2] ?? '') !== '' => '.*',
+            ($token[3] ?? '') !== '' => '.',
+            default => preg_quote(($token[4] ?? '') !== '' ? $token[4] : $token[1], '/'),
+        }, $tokens));
         $rows = [];
 
         foreach ($this->tables[$found[2]] ?? [] as $id => $columns) {
-            if ($id > $last && str_contains($columns[$found[1]] ?? '', $needle)) {
+            if ($id > $last && preg_match('/^'.$pattern.'$/Ds', $columns[$found[1]] ?? '') === 1) {
                 $rows[] = (object) ['id' => (string) $id, 'value' => $columns[$found[1]]];
             }
         }

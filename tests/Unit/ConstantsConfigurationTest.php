@@ -115,3 +115,35 @@ it('does not keep the bucket of the library for the sizes unless the source is s
 
     expect($settings->imgproxyBucket)->toBeNull();
 });
+
+it('takes the folder and the URL of WordPress whether or not they end with a slash', function (): void {
+    $configuration = constants(['WP_CONTENT_DIR' => '/var/www/content/', 'WP_CONTENT_URL' => 'https://site.test/content/']);
+
+    expect($configuration->config()->url)->toBe('https://site.test/content/uploads')
+        ->and($configuration->localRoot())->toBe('/var/www/content/uploads')
+        ->and($configuration->config()->asyncThumbnails)->toBeFalse()
+        ->and($configuration->config()->cacheControl)->toBe('public, max-age=31536000, immutable')
+        ->and($configuration->config()->privateExpiry)->toBe('+6 hours');
+});
+
+it('cleans the legacy URLs: no empty entry, and a switch given as a string or a number is a switch', function (): void {
+    $config = constants(['POLLORA_MEDIA_URL' => 'https://m.test', 'POLLORA_MEDIA_LEGACY_URLS' => ' https://a.test/u , ,', 'POLLORA_MEDIA_ASYNC_THUMBNAILS' => 1])->config();
+
+    expect($config->legacyUrls)->toBe(['https://a.test/u'])
+        ->and($config->asyncThumbnails)->toBeTrue()
+        ->and(constants(['POLLORA_MEDIA_URL' => 'https://m.test', 'POLLORA_MEDIA_LEGACY_URLS' => [null, 'https://b.test/u']])->config()->legacyUrls)->toBe(['https://b.test/u']);
+});
+
+it('reads an empty constant of a service as not set, so an empty secret never signs anything', function (): void {
+    $settings = constants(['POLLORA_MEDIA_IMGPROXY_KEY' => '', 'POLLORA_MEDIA_IMGPROXY_SALT' => '', 'POLLORA_MEDIA_BUNNY_API_KEY' => '', 'POLLORA_MEDIA_BUCKET' => '', 'POLLORA_MEDIA_IMGPROXY_SOURCE' => 's3'])->thumbnailDriver();
+
+    expect($settings->imgproxyKey)->toBeNull()
+        ->and($settings->imgproxySalt)->toBeNull()
+        ->and($settings->bunnyApiKey)->toBeNull()
+        ->and($settings->imgproxyBucket)->toBeNull()
+        ->and(fn () => constants(['POLLORA_MEDIA_DRIVER' => 's3', 'POLLORA_MEDIA_BUCKET' => ''])->filesystem())->toThrow(RuntimeException::class, 'POLLORA_MEDIA_BUCKET');
+});
+
+it('reads the limit of bytes of a size made on demand', function (): void {
+    expect(constants(['POLLORA_MEDIA_THUMBNAILS_MAX_BYTES' => '1024'])->thumbnailLimits()->maxBytes)->toBe(1024);
+});

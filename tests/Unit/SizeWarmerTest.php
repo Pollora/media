@@ -84,3 +84,30 @@ it('only looks at the images uploaded since a date, when given one', function ()
 
     expect($seen)->toBe([['after' => '2026-01-01']]);
 });
+
+it('goes through the whole library, a batch after the other', function (): void {
+    $pages = [1 => range(1000, 1099), 2 => [10]];
+    Functions\when('get_posts')->alias(fn (array $args): array => $args['post_type'] === 'attachment' && $args['post_status'] === 'inherit' && $args['post_mime_type'] === 'image' && $args['fields'] === 'ids' ? ($pages[$args['paged']] ?? []) : []);
+    Functions\when('wp_get_attachment_metadata')->alias(fn (int $id): array => $id === 10 ? $this->metadata[10] : ['file' => 'doc.pdf']);
+
+    expect($this->warmer->warm())->toBe(['checked' => 1, 'made' => 2, 'failed' => 0]);
+});
+
+it('warms a size with its extra widths, and no other size that merely begins like it', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('hero')->scale(width: 1600)->widths([640]);
+    $sizes->add('hero-large')->scale(width: 2400);
+    $sizes->add('card')->scale(width: 300)->widths([100]);
+    $processor = new FakeImageProcessor($this->disk->storage);
+    $warmer = new SizeWarmer(new DeclaredSizes($sizes, new MediaConfig('https://m.test'), $this->disk->storage, $processor), $this->disk->storage);
+
+    $warmer->warm(only: 'hero');
+
+    expect(array_values(array_unique(array_column($processor->made, 'size'))))->toBe(['hero', 'hero-640w']);
+});
+
+it('goes on with the other sizes of an image when one is already there', function (): void {
+    $this->warmer->warm(only: 'card');
+
+    expect($this->warmer->warm())->toBe(['checked' => 2, 'made' => 2, 'failed' => 0]);
+});

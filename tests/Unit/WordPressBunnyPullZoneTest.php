@@ -84,3 +84,29 @@ it('refuses a pull zone id that ends with a newline: the id goes into the URL of
     expect(fn () => (new WordPressBunnyPullZone('k'))->classes("1234\n"))->toThrow(InvalidArgumentException::class)
         ->and($this->requests)->toHaveCount(0);
 });
+
+it('takes only a success for one: anything else is a refusal, whatever the body says', function (int $status, bool $accepted): void {
+    answering(['response' => ['code' => $status], 'body' => '{}'], $this->requests);
+    $read = fn (): array => (new WordPressBunnyPullZone('k'))->classes('1234');
+
+    $accepted ? expect($read())->toBe([]) : expect($read)->toThrow(RuntimeException::class, (string) $status);
+})->with([[199, false], [200, true], [204, true], [299, true], [300, false]]);
+
+it('skips what is not a class, and reads the values of the properties as text', function (): void {
+    answering(['response' => ['code' => 200], 'body' => json_encode(['OptimizerClasses' => ['junk', ['Name' => 7], ['Properties' => []], ['Name' => 'bare'], ['Name' => 'card', 'Properties' => ['width' => 600, '0' => 'first']]]])], $this->requests);
+
+    expect((new WordPressBunnyPullZone('k'))->classes('1234'))->toBe([
+        ['Name' => 'bare', 'Properties' => []],
+        ['Name' => 'card', 'Properties' => ['width' => '600', 0 => 'first']],
+    ]);
+});
+
+it('writes empty properties as an object, which the API expects', function (): void {
+    answering(['response' => ['code' => 200], 'body' => '{}'], $this->requests);
+
+    (new WordPressBunnyPullZone('k'))->saveClasses('1234', [['Name' => 'card', 'Properties' => []]]);
+
+    expect($this->requests[0]['args']['body'])->toBe('{"OptimizerClasses":[{"Name":"card","Properties":{}}]}')
+        ->and($this->requests[0]['args']['headers']['Accept'])->toBe('application/json')
+        ->and($this->requests[0]['args']['timeout'])->toBeGreaterThan(0);
+});

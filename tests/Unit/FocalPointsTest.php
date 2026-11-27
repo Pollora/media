@@ -168,3 +168,23 @@ it('lists the point of each original by its path, once', function (): void {
         ->and($byFile['2026/10/photo.jpg']->toArray())->toBe(['x' => 0.25, 'y' => 0.75])
         ->and($this->points->byFile())->toBe($byFile);
 });
+
+it('reads the meta as one value, and the file of each original that has a point', function (): void {
+    // WordPress answers a list of values unless a single one is asked for
+    Functions\when('get_post_meta')->alias(function (int $id, string $key, bool $single = false): mixed {
+        $value = $key === '_wp_attached_file' ? ($id === 3 ? '' : '2026/'.$id.'.jpg') : ['x' => 0.1, 'y' => 0.2];
+
+        return $single ? $value : [$value];
+    });
+    $asked = [];
+    Functions\when('get_posts')->alias(function (array $args) use (&$asked): array {
+        $asked = $args;
+
+        return ['1', '3'];
+    });
+    $points = new FocalPoints;
+
+    expect($points->for(1)?->token())->toBe('f0100_0200')
+        ->and(array_keys($points->byFile()))->toBe(['2026/1.jpg'])
+        ->and($asked)->toMatchArray(['post_type' => 'attachment', 'post_status' => 'any', 'fields' => 'ids', 'nopaging' => true, 'meta_key' => FocalPoints::META]);
+});

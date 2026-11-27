@@ -68,3 +68,25 @@ it('is the same point only when both coordinates are', function (): void {
         ->and($point->equals(new FocalPoint(0.25, 0.76)))->toBeFalse()
         ->and($point->equals(null))->toBeFalse();
 });
+
+it('is read from the thousandths of a file name at both ends of the image, and not past them', function (int $x, int $y, bool $point): void {
+    expect(FocalPoint::fromThousandths($x, $y) instanceof FocalPoint)->toBe($point);
+})->with([
+    [0, 0, true], [1000, 1000, true], [-1, 0, false], [0, -1, false], [1001, 0, false], [0, 1001, false],
+]);
+
+it('writes the nearest thousandth in a file name, whatever the float made of it', function (): void {
+    // 0.57 * 1000 and 0.29 * 100 are not whole numbers as floats
+    expect((new FocalPoint(0.57, 0.001))->token())->toBe('f0570_0001')
+        ->and((new FocalPoint(1.0, 0.0))->token())->toBe('f1000_0000')
+        ->and((new FocalPoint(0.009, 0.285))->token())->toBe('f0009_0285');
+});
+
+it('is no point when only some of it is there', function (mixed $value): void {
+    expect(FocalPoint::tryFrom($value))->toBeNull();
+})->with([
+    'not an array' => ['0.5,0.5'],
+    'one coordinate' => [['x' => 0.5]],
+    'a coordinate that is not a number' => [['x' => 'left', 'y' => 0.5]],
+    'the other that is not a number' => [['x' => 0.5, 'y' => []]],
+]);

@@ -61,3 +61,33 @@ it('leaves a row alone when the address is not in it', function (): void {
     expect(array_sum($changed))->toBe(0)
         ->and($this->database->updates)->toBe([]);
 });
+
+it('finds an address in the middle of a value, with characters LIKE would read as wildcards', function (): void {
+    $old = 'https://site.test/my_uploads';
+    $database = new FakeDatabase([
+        'wp_posts' => [1 => ['post_content' => 'before '.$old.'/a.jpg after', 'post_excerpt' => 'https://site.test/myXuploads/a.jpg']],
+    ]);
+
+    (new UrlReplacement($database))->replace($old, $this->new, dryRun: false);
+
+    expect($database->tables['wp_posts'][1]['post_content'])->toBe('before '.$this->new.'/a.jpg after')
+        ->and($database->tables['wp_posts'][1]['post_excerpt'])->toBe('https://site.test/myXuploads/a.jpg');
+});
+
+it('goes through every batch of rows, once', function (): void {
+    $rows = [];
+    foreach (range(1, 1201) as $id) {
+        $rows[$id] = ['post_content' => $this->old.'/'.$id.'.jpg', 'post_excerpt' => ''];
+    }
+    $database = new FakeDatabase(['wp_posts' => $rows]);
+
+    $changed = (new UrlReplacement($database))->replace($this->old, $this->new);
+
+    expect($changed['posts.post_content'])->toBe(1201);
+});
+
+it('does not flush the cache in a dry run', function (): void {
+    (new UrlReplacement($this->database))->replace($this->old, $this->new);
+
+    expect($this->flushed)->toBe(0);
+});

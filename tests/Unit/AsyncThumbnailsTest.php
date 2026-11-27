@@ -79,3 +79,10 @@ it('registers its two filters and the deferred handler on the hook service it is
 
     expect($pending->attempts())->toBe(3);
 });
+
+it('queues nothing on an update of the metadata, even with sizes missing', function (): void {
+    Functions\when('wp_get_missing_image_subsizes')->justReturn(['large' => []]);
+    Actions\expectDone(AsyncThumbnails::HOOK)->never();
+
+    $this->thumbnails->queueTheRest(['sizes' => []], 42, 'update');
+});

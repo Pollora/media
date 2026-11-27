@@ -321,3 +321,185 @@ it('keeps a write that reached the disk when there is no temporary directory for
         ->and(implode('', $output))->toBe('5')
         ->and(file_get_contents($this->disk->root.'/2026/10/photo.jpg'))->toBe('bytes');
 });
+
+/** The local copies that hold these bytes: other tests, run in parallel, keep copies of their own in the same directory. */
+function localCopiesOf(string $bytes): array
+{
+    return array_values(array_filter(
+        glob(sys_get_temp_dir().'/pollora-media-copy-*') ?: [],
+        static fn (string $copy): bool => @file_get_contents($copy) === $bytes,
+    ));
+}
+
+function withoutWarnings(Closure $call): mixed
+{
+    set_error_handler(static fn (): bool => true);
+
+    try {
+        return $call();
+    } finally {
+        restore_error_handler();
+    }
+}
+
+it('refuses every operation on a path that climbs out of the library, and touches nothing', function (): void {
+    $this->disk->storage->write('inside.txt', 'inside');
+    $outside = dirname($this->disk->root).'/pollora-outside-'.bin2hex(random_bytes(4)).'.txt';
+    file_put_contents($outside, 'outside');
+    $climb = 'pollora://../'.basename($outside);
+
+    try {
+        withoutWarnings(function () use ($climb): void {
+            expect(file_exists($climb))->toBeFalse()
+                ->and(unlink($climb))->toBeFalse()
+                ->and(rename($climb, 'pollora://stolen.txt'))->toBeFalse()
+                ->and(rename('pollora://inside.txt', $climb))->toBeFalse()
+                ->and(mkdir('pollora://../folder'))->toBeFalse()
+                ->and(rmdir('pollora://..'))->toBeFalse()
+                ->and(opendir('pollora://..'))->toBeFalse();
+        });
+
+        expect(file_get_contents($outside))->toBe('outside')
+            ->and(file_get_contents($this->disk->root.'/inside.txt'))->toBe('inside')
+            ->and(file_exists($this->disk->root.'/stolen.txt'))->toBeFalse();
+    } finally {
+        unlink($outside);
+    }
+});
+
+it('answers false, without an error, when no disk is configured', function (): void {
+    StreamWrapper::unregister();
+    $wrapper = new StreamWrapper;
+    $opened = null;
+
+    expect($wrapper->stream_open('pollora://a.txt', 'w', 0, $opened))->toBeFalse()
+        ->and($wrapper->url_stat('pollora://a.txt', 0))->toBeFalse()
+        ->and($wrapper->unlink('pollora://a.txt'))->toBeFalse()
+        ->and($wrapper->rename('pollora://a.txt', 'pollora://b.txt'))->toBeFalse()
+        ->and($wrapper->rmdir('pollora://folder', 0))->toBeFalse()
+        ->and($wrapper->dir_opendir('pollora://folder', 0))->toBeFalse();
+});
+
+it('keeps one local copy of a file however often it is written, so uploads do not pile up in the temporary directory', function (): void {
+    $marker = 'one-copy-'.bin2hex(random_bytes(8));
+
+    file_put_contents('pollora://private/contract.pdf', $marker);
+    file_put_contents('pollora://private/contract.pdf', $marker);
+    file_put_contents('pollora://private/contract.pdf', $marker);
+
+    expect(localCopiesOf($marker))->toHaveCount(1);
+});
+
+it('removes the local copy of a file that is deleted, renamed, or removed with its folder', function (string $operation): void {
+    $marker = 'gone-copy-'.bin2hex(random_bytes(8));
+    file_put_contents('pollora://folder/secret.txt', $marker);
+
+    match ($operation) {
+        'unlink' => unlink('pollora://folder/secret.txt'),
+        'rename' => rename('pollora://folder/secret.txt', 'pollora://elsewhere.txt'),
+        'rmdir' => rmdir('pollora://folder'),
+    };
+
+    expect(localCopiesOf($marker))->toBe([])
+        ->and(withoutWarnings(static fn () => file_get_contents('pollora://folder/secret.txt')))->toBeFalse();
+})->with(['unlink', 'rename', 'rmdir']);
+
+it('forgets what it kept of the previous disk when it is registered again', function (): void {
+    $marker = 'first-disk-'.bin2hex(random_bytes(8));
+    file_put_contents('pollora://same.txt', $marker);
+
+    $second = new TemporaryStorage;
+    $second->storage->write('same.txt', 'second disk');
+    StreamWrapper::register($second->storage, new MediaConfig('https://media.test'));
+
+    expect(file_get_contents('pollora://same.txt'))->toBe('second disk')
+        ->and(localCopiesOf($marker))->toBe([]);
+});
+
+it('gives the bytes of the source once a file is renamed over one it had already read', function (): void {
+    file_put_contents('pollora://old.txt', 'old bytes');
+    file_put_contents('pollora://new.txt', 'new, longer bytes');
+    file_get_contents('pollora://old.txt');
+
+    rename('pollora://new.txt', 'pollora://old.txt');
+    clearstatcache();
+
+    expect(file_get_contents('pollora://old.txt'))->toBe('new, longer bytes')
+        ->and(filesize('pollora://old.txt'))->toBe(17);
+});
+
+it('remembers the size and date of a file it has read, and keeps the date the disk gave', function (): void {
+    $this->disk->storage->write('read.txt', '123456');
+    $this->disk->storage->write('dated.txt', '12');
+    touch($this->disk->root.'/dated.txt', 1_000_000_000);
+    $counting = new CountingStorage($this->disk->storage);
+    StreamWrapper::register($counting, new MediaConfig('https://media.test'));
+
+    file_get_contents('pollora://read.txt');
+    $stat = stat('pollora://read.txt');
+
+    expect($stat['size'])->toBe(6)
+        ->and(abs($stat['mtime'] - time()))->toBeLessThan(5)
+        ->and($counting->statCalls)->toBe(0);
+
+    // The date the disk reports, whatever the filesystem made of the one asked
+    $dated = $this->disk->storage->lastModified('dated.txt');
+    clearstatcache();
+    expect($dated)->toBeLessThan(time() - 3600)
+        ->and(filemtime('pollora://dated.txt'))->toBe($dated);
+    file_get_contents('pollora://dated.txt');
+    clearstatcache();
+    expect(filemtime('pollora://dated.txt'))->toBe($dated);
+});
+
+it('opens a file it already knows without asking the disk whether it is there', function (): void {
+    $this->disk->storage->write('known.txt', 'x');
+    $counting = new CountingStorage($this->disk->storage);
+    StreamWrapper::register($counting, new MediaConfig('https://media.test'));
+
+    file_exists('pollora://known.txt');
+    fclose(fopen('pollora://known.txt', 'r'));
+
+    expect($counting->existsCalls)->toBe(1);
+});
+
+it('creates a file that does not exist with mode x', function (): void {
+    $handle = fopen('pollora://fresh.txt', 'x');
+    fwrite($handle, 'new');
+    fclose($handle);
+
+    expect(file_get_contents($this->disk->root.'/fresh.txt'))->toBe('new');
+});
+
+it('reports a seek, a stat of an open stream, and the permissions WordPress checks before it writes', function (): void {
+    file_put_contents('pollora://dir/f.txt', 'abcdef');
+    $handle = fopen('pollora://dir/f.txt', 'r');
+
+    expect(fseek($handle, 2))->toBe(0)
+        ->and(fseek($handle, -20))->toBe(-1)
+        ->and(fstat($handle)['size'])->toBe(6)
+        ->and(fstat($handle)['mode'])->toBe(0100644);
+    fclose($handle);
+
+    clearstatcache();
+    expect(fileperms('pollora://dir'))->toBe(040755)
+        ->and(fileperms('pollora://dir/f.txt'))->toBe(0100644)
+        ->and(filesize('pollora://dir'))->toBe(0)
+        ->and(fileowner('pollora://dir'))->toBe(getmyuid())
+        ->and(filegroup('pollora://dir'))->toBe(getmygid());
+});
+
+it('removes its local copies when the process ends', function (): void {
+    $marker = 'at-shutdown-'.bin2hex(random_bytes(8));
+    $script = sprintf(
+        'require %s; $d = new Pollora\Media\Tests\Fixtures\TemporaryStorage; Pollora\Media\Infrastructure\WordPress\StreamWrapper::register($d->storage, new Pollora\Media\Domain\Models\MediaConfig("https://media.test")); echo file_put_contents("pollora://a.txt", %s);',
+        var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true),
+        var_export($marker, true),
+    );
+
+    exec(sprintf('%s -d error_reporting=%d -r %s 2>&1', escapeshellarg(PHP_BINARY), E_ERROR, escapeshellarg($script)), $output, $status);
+
+    expect($status)->toBe(0, implode("\n", $output))
+        ->and(implode('', $output))->toBe((string) strlen($marker))
+        ->and(localCopiesOf($marker))->toBe([]);
+});

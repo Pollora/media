@@ -74,3 +74,38 @@ it('puts nothing on the disk for an archive it cannot read', function (): void {
         unlink($zip);
     }
 });
+
+it('keeps an export for three days unless a filter says otherwise', function (): void {
+    foreach (['recent.zip' => 3 * 86400 - 30, 'expired.zip' => 3 * 86400 + 3600] as $file => $age) {
+        $this->disk->storage->write('wp-personal-data-exports/'.$file, 'x');
+        touch($this->disk->root.'/wp-personal-data-exports/'.$file, time() - $age);
+    }
+
+    $this->exports->deleteOld();
+
+    expect($this->disk->storage->exists('wp-personal-data-exports/recent.zip'))->toBeTrue()
+        ->and($this->disk->storage->exists('wp-personal-data-exports/expired.zip'))->toBeFalse();
+});
+
+it('deletes old archives only: not the index WordPress puts in the folder, however old', function (): void {
+    $this->disk->storage->write('wp-personal-data-exports/index.php', '<?php');
+    touch($this->disk->root.'/wp-personal-data-exports/index.php', time() - 30 * 86400);
+
+    $this->exports->deleteOld();
+
+    expect($this->disk->storage->exists('wp-personal-data-exports/index.php'))->toBeTrue();
+});
+
+it('keeps the folder the archives are built in closed to the other users of the server', function (): void {
+    // Another process, with a temporary directory of its own: the folder of this one may exist already
+    $tmp = $this->disk->root.'/tmp';
+    mkdir($tmp);
+    $script = sprintf(
+        'require %s; $e = new Pollora\\Media\\Infrastructure\\WordPress\\PrivacyExports((new Pollora\\Media\\Tests\\Fixtures\\TemporaryStorage)->storage, new Pollora\\Media\\Domain\\Models\\MediaConfig("https://media.test")); $d = $e->exportsDir("pollora://uploads/wp-personal-data-exports/"); clearstatcache(); printf("%%o", fileperms($d) & 0777);',
+        var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true),
+    );
+
+    exec(sprintf('%s -d error_reporting=%d -d sys_temp_dir=%s -r %s 2>&1', escapeshellarg(PHP_BINARY), E_ERROR, escapeshellarg($tmp), escapeshellarg($script)), $output, $status);
+
+    expect($status)->toBe(0, implode("\n", $output))->and(implode('', $output))->toBe('700');
+});

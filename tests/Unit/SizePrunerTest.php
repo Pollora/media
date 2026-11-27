@@ -64,3 +64,18 @@ it('keeps the sizes of the previous original of an edited image, which Restore i
 
     expect($found)->not->toContain($edited)->and($found)->not->toContain($this->current);
 });
+
+it('finds an original at the root of the library, or with an extension in capitals', function (string $original): void {
+    $this->disk->storage->write($original, 'x');
+    $stale = preg_replace('/\.[^.]+$/', '', $original).'-banner-900x300-'.str_repeat('d', 12).'.webp';
+    $this->disk->storage->write($stale, 'x');
+
+    expect((new SizePruner($this->disk->storage, $this->sizes))->stale())->toContain($stale);
+})->with(['root.jpg', '2026/10/camera.JPG']);
+
+it('lists what it found in order, and never a folder', function (): void {
+    $found = (new SizePruner($this->disk->storage, $this->sizes))->stale();
+    $this->disk->storage->write('2026/10/photo-aaa-900x300-'.str_repeat('b', 12).'.webp/inner.txt', 'x');
+
+    expect((new SizePruner($this->disk->storage, $this->sizes))->stale())->toBe($found);
+});
