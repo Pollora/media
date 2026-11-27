@@ -77,3 +77,10 @@ it('refuses a size anchored away from the center, which it cannot crop, and serv
         ->and($driver->sizeOf('https://media.client.fr/a.jpg?class=portrait'))->toBeNull()
         ->and($driver->refusal($this->card))->toBeNull();
 });
+
+it('does not read as its own a URL of a host that begins the same way, nor one without a class', function (): void {
+    expect($this->driver->sizeOf('https://media.client.fr.evil.test/a.jpg?class=card'))->toBeNull()
+        ->and($this->driver->sizeOf('https://media.client.frx/a.jpg?class=card'))->toBeNull()
+        ->and($this->driver->sizeOf('https://media.client.fr/a.jpg'))->toBeNull()
+        ->and($this->driver->sizeOf('https://media.client.fr/a.jpg?class[]=card'))->toBeNull();
+});

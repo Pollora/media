@@ -95,3 +95,43 @@ it('does not end the request for a size it cannot make: WordPress answers', func
 })->after(function (): void {
     unset($_SERVER['REQUEST_URI']);
 });
+
+it('takes the prefix of the library out only when it is a whole folder of the path', function (): void {
+    expect($this->route->keyOf('/content/uploads-old/photo-card-600x400-0123456789ab.webp'))->toBe('content/uploads-old/photo-card-600x400-0123456789ab.webp');
+});
+
+/**
+ * handle() ends the request, so a request is answered in a process of its own.
+ *
+ * @return string What the visitor receives, then `|next` when WordPress goes on
+ */
+function answerTo(string $requestUri, string $root, int &$status = 0): string
+{
+    $script = sprintf(
+        <<<'PHP'
+        require %s;
+        function status_header(int $code): void { echo $code, '|'; }
+        function apply_filters(string $hook, mixed $value): mixed { return $value; }
+        $disk = new Pollora\Media\Infrastructure\Flysystem\FlysystemMediaStorage(new League\Flysystem\Filesystem(new League\Flysystem\Local\LocalFilesystemAdapter(%s)));
+        $sizes = new Pollora\Media\Application\Services\ImageSizes(fn (): string => 'secret-key');
+        $sizes->add('card')->cover(600, 400);
+        $service = new Pollora\Media\Application\Services\ThumbnailService($disk, $sizes, new Pollora\Media\Tests\Fixtures\FakeImageProcessor($disk), new Pollora\Media\Infrastructure\Locking\FlockGenerationLock(%s), new Pollora\Media\Application\Services\ThumbnailLimits(wait: 0), static fn (string $key): bool => false);
+        $_SERVER['REQUEST_URI'] = %s;
+        (new Pollora\Media\Infrastructure\WordPress\ThumbnailRoute($service, new Pollora\Media\Domain\Models\MediaConfig('https://site.test/content/uploads')))->handle();
+        echo '|next';
+        PHP,
+        var_export(dirname(__DIR__, 2).'/vendor/autoload.php', true),
+        var_export($root, true),
+        var_export($root.'/.locks', true),
+        var_export($requestUri, true),
+    );
+
+    exec(sprintf('%s -d error_reporting=%d -r %s 2>&1', escapeshellarg(PHP_BINARY), E_ERROR, escapeshellarg($script)), $output, $status);
+
+    return implode("\n", $output);
+}
+
+it('sends the size it made and ends the request, and lets WordPress answer for one it cannot make', function (): void {
+    expect(answerTo('/content/uploads/'.$this->file, $this->disk->root))->toBe('200|image 600x400')
+        ->and(answerTo('/content/uploads/2026/10/gone-card-600x400-0123456789ab.webp', $this->disk->root))->toBe('|next');
+});

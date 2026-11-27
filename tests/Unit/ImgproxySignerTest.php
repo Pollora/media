@@ -50,3 +50,22 @@ it('refuses a key or a salt that is not hexadecimal, and a size imgproxy cannot 
     'size zero' => ['736563726574', '68656C6C6F', 0],
     'size over 32' => ['736563726574', '68656C6C6F', 33],
 ])->throws(InvalidArgumentException::class);
+
+it('accepts the smallest and the largest signature sizes', function (int $size, int $length): void {
+    expect((new ImgproxySigner('736563726574', '68656C6C6F', $size))->sign(IMGPROXY_DOC_PATH))->toHaveLength($length);
+})->with([[1, 2], [32, 43]]);
+
+it('names the variable to fix when a key or a salt cannot be read, without printing its value', function (string $key, string $salt, string $variable): void {
+    try {
+        new ImgproxySigner($key, $salt);
+    } catch (InvalidArgumentException $exception) {
+        expect($exception->getMessage())->toContain($variable)->not->toContain('not-hexadecimal');
+
+        return;
+    }
+
+    throw new LogicException('Expected an InvalidArgumentException.');
+})->with([
+    ['not-hexadecimal', '68656C6C6F', 'IMGPROXY_KEY'],
+    ['736563726574', 'not-hexadecimal', 'IMGPROXY_SALT'],
+]);

@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Pollora\Media\Application\Services\ImageSizes;
 use Pollora\Media\Application\Services\ThumbnailLimits;
 use Pollora\Media\Application\Services\ThumbnailService;
+use Pollora\Media\Domain\Contracts\GenerationLock;
+use Pollora\Media\Domain\Contracts\LockHandle;
 use Pollora\Media\Infrastructure\Locking\FlockGenerationLock;
 use Pollora\Media\Tests\Fixtures\CountingStorage;
 use Pollora\Media\Tests\Fixtures\FakeImageProcessor;
@@ -178,4 +180,56 @@ it('does not take a file whose name ends with a newline for a size already made'
     foreach ($busy as $slot) {
         $slot?->release();
     }
+});
+
+it('refuses a path that climbs, even when its name carries a valid signature', function (): void {
+    $climbing = $this->sizes->names()->for('2026/../photo.png', $this->sizes->get('card'), 3000, 2000);
+
+    expect(($this->make)()->serve($climbing)->status)->toBe(404)
+        ->and($this->counting->existsCalls)->toBe(0)
+        ->and($this->counting->readCalls)->toBe(0);
+});
+
+it('makes the size of an original exactly at the limits of pixels and bytes, and not one past them', function (int $pixels, int $bytes, int $status): void {
+    $limits = new ThumbnailLimits(maxPixels: $pixels, maxBytes: $bytes, concurrency: 2, wait: 0);
+
+    expect(($this->make)(null, $limits)->serve($this->file)->status)->toBe($status);
+})->with(fn (): array => [
+    'at both limits' => [6_000_000, strlen(PngHeader::bytes(3000, 2000)) + 100, 200],
+    'one pixel over' => [5_999_999, 1_000, 404],
+    'one byte over' => [6_000_000, strlen(PngHeader::bytes(3000, 2000)) + 99, 404],
+]);
+
+it('gives its place back once a size is made, so the next one can be made too', function (): void {
+    $service = ($this->make)(null, new ThumbnailLimits(maxPixels: 50_000_000, maxBytes: 1_000_000, concurrency: 1, wait: 0));
+    $variant = $this->sizes->names()->for('2026/10/photo.png', $this->sizes->variantsOf($this->sizes->get('hero'))['hero-400w'], 3000, 2000);
+
+    $service->serve($this->file);
+    $second = $service->serve($variant);
+
+    expect($second->headers['Cache-Control'])->not->toBe('no-store')
+        ->and($this->processor->made)->toHaveCount(2);
+});
+
+it('does not make again a file that appeared while it was taking the lock of that file', function (): void {
+    $lock = new class(new FlockGenerationLock($this->lockDir), fn () => $this->disk->storage->write($this->file, 'made meanwhile')) implements GenerationLock
+    {
+        public function __construct(private readonly GenerationLock $inner, private readonly Closure $meanwhile) {}
+
+        public function forFile(string $key, int $wait): ?LockHandle
+        {
+            ($this->meanwhile)();
+
+            return $this->inner->forFile($key, $wait);
+        }
+
+        public function slot(int $concurrency, int $wait): ?LockHandle
+        {
+            return $this->inner->slot($concurrency, $wait);
+        }
+    };
+    $service = new ThumbnailService($this->counting, $this->sizes, $this->processor, $lock, $this->limits, static fn (string $key): bool => false);
+
+    expect(stream_get_contents($service->serve($this->file)->body))->toBe('made meanwhile')
+        ->and($this->processor->made)->toBe([]);
 });

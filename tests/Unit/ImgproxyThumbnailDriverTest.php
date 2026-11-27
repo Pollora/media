@@ -81,3 +81,13 @@ it('does not find a size in a URL whose size segment ends with a newline', funct
     expect($this->driver->sizeOf('https://img.client.fr/sig/card/plain/x.jpg@webp'))->toBe('card')
         ->and($this->driver->sizeOf("https://img.client.fr/sig/card\n/plain/x.jpg@webp"))->toBeNull();
 });
+
+it('does not read as its own a URL that only resembles one', function (string $url): void {
+    expect($this->driver->sizeOf($url))->toBeNull();
+})->with([
+    'another host that begins the same way' => ['https://img.client.fr.evil.test/sig/card/plain/x.jpg'],
+    'a host one character longer' => ['https://img.client.frx/sig/card/plain/x.jpg'],
+    'no source' => ['https://img.client.fr/sig/card'],
+    'not a plain source' => ['https://img.client.fr/sig/card/encoded/x.jpg'],
+    'a name that is not one' => ['https://img.client.fr/sig/CARD!/plain/x.jpg'],
+]);
