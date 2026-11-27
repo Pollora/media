@@ -225,3 +225,53 @@ it('gives the URL of a size of an original WordPress recorded with no dimensions
         ->and($image[0])->toStartWith('https://media.client.fr/2026/10/photo-hero-0x0-')
         ->and([$image[1], $image[2]])->toBe([0, 0]);
 });
+
+it('describes a file that is already there as the size it stands for', function (string $format, string $mime): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $declaration = $sizes->add('card')->cover(600, 400);
+    $format === 'avif' ? $declaration->avif() : ($format === 'webp' ? $declaration->webp() : $declaration->original());
+    $declared = new DeclaredSizes($sizes, new MediaConfig('https://m.test'), $this->disk->storage, $this->processor);
+    $meta = ['file' => '2026/10/photo.'.($format === 'png' ? 'png' : 'jpg'), 'width' => 3000, 'height' => 2000];
+    $file = $declared->fileFor($meta, $sizes->get('card'));
+    $this->disk->storage->write($file, '1234567');
+
+    expect($declared->make($meta, $sizes->get('card')))->toBe(['file' => basename($file), 'width' => 600, 'height' => 400, 'mime-type' => $mime, 'filesize' => 7])
+        ->and($this->processor->made)->toBe([]);
+})->with([
+    ['webp', 'image/webp'],
+    ['avif', 'image/avif'],
+    ['png', 'image/png'],
+    ['jpg', 'image/jpeg'],
+]);
+
+it('says in the log which size of which image could not be made', function (): void {
+    $declared = new DeclaredSizes($this->sizes, new MediaConfig('https://m.test'), $this->disk->storage, new FakeImageProcessor($this->disk->storage, failing: 'card'));
+    $log = tempnam(sys_get_temp_dir(), 'media-log');
+    $previous = ini_set('error_log', $log);
+
+    try {
+        $made = $declared->make($this->meta, $this->sizes->get('card'));
+    } finally {
+        ini_set('error_log', (string) $previous);
+    }
+
+    expect($made)->toBeNull()
+        ->and(file_get_contents($log))->toContain('"card"', '2026/10/photo.jpg', 'cannot write');
+    unlink($log);
+});
+
+it('serves a GIF with its dimensions as numbers and a URL without a double slash', function (): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn(['file' => '/2026/10/loop.GIF', 'width' => '400', 'height' => '300']);
+
+    expect($this->declared->downsize(false, 8, 'card'))->toBe(['https://media.client.fr/2026/10/loop.GIF', 400, 300, false]);
+});
+
+it('computes the size of an original whose dimensions were stored as text', function (): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn(['file' => '2026/10/photo.jpg', 'width' => '3000', 'height' => '2000']);
+
+    expect($this->declared->downsize(false, 7, 'card'))->toBe(['https://media.client.fr/'.$this->cardFile, 600, 400, true]);
+});
+
+it('leaves the srcset of a document alone', function (): void {
+    expect($this->declared->srcset(['kept'], [1, 1], 'https://media.client.fr/'.$this->cardFile, ['file' => '2026/10/doc.pdf'], 7))->toBe(['kept']);
+});

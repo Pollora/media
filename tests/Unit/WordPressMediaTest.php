@@ -233,3 +233,34 @@ it('reports a driver of the sizes that could not be used, and a size the service
         ->and((new WordPressMedia($this->disk->storage, $this->config, sizes: $sizes, thumbnails: $good))->thumbnailProblems())->toHaveCount(1)->and((new WordPressMedia($this->disk->storage, $this->config, sizes: $sizes, thumbnails: $good))->thumbnailProblems()[0])->toContain('default')
         ->and($this->media->thumbnailProblems())->toBe([]);
 });
+
+it('goes on deleting the files of a media when one of them cannot be deleted', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('card')->cover(600, 400);
+    $media = new WordPressMedia($this->disk->storage, $this->config, null, $sizes);
+    $this->disk->storage->write('2026/10/second.webp', 'x');
+    Functions\when('wp_get_attachment_metadata')->justReturn(false);
+    Filters\expectApplied('pollora/media/attachment_files')->andReturn(['../outside', '/2026/10/second.webp']);
+
+    $media->deleteAttachment(9);
+
+    expect($this->disk->storage->exists('2026/10/second.webp'))->toBeFalse();
+});
+
+it('says a media was deleted once, with the files it had', function (): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn(['file' => '2026/a.jpg']);
+    Brain\Monkey\Actions\expectDone('pollora/media/deleted')->once()->with(42, ['2026/a.jpg']);
+
+    $this->media->deleteAttachment(42);
+    $this->media->deletedPost(42);
+    $this->media->deletedPost(42);
+});
+
+it('registers its commands for the uploads folder and URL of WordPress', function (): void {
+    WP_CLI::reset();
+    Functions\when('did_action')->justReturn(0);
+
+    $this->media->register();
+
+    expect(array_keys(WP_CLI::$commands))->toBe(['pollora media', 'pollora media thumbs']);
+});

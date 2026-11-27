@@ -175,3 +175,69 @@ describe('a focal point that changes', function (): void {
             ->and($this->updated)->toBeNull();
     });
 });
+
+describe('what a change of focal point deletes', function (): void {
+    beforeEach(function (): void {
+        $this->declared = ($this->make)();
+        Functions\when('wp_update_attachment_metadata')->justReturn(true);
+    });
+
+    it('is nothing when the point is saved as it was', function (): void {
+        $this->disk->storage->write(($this->around)('card'), 'crop');
+
+        $this->declared->focalWillChange(1, 7, '_pollora_focal_point');
+        $this->declared->focalChanged(1, 7, '_pollora_focal_point');
+
+        expect($this->disk->storage->exists(($this->around)('card')))->toBeTrue()
+            ->and($this->processor->made)->not->toContain(null);
+    });
+
+    it('is nothing for the files of another meta, nor of something that is not a media', function (mixed $id, string $key): void {
+        $this->disk->storage->write(($this->around)('card'), 'crop');
+
+        $this->declared->focalWillChange(1, $id, $key);
+        unset($this->postMeta[7]);
+        $this->declared->focalChanged(1, $id, $key);
+
+        expect($this->disk->storage->exists(($this->around)('card')))->toBeTrue();
+    })->with([
+        'another meta' => [7, '_wp_attached_file'],
+        'not a media' => ['seven', '_pollora_focal_point'],
+    ]);
+
+    it('takes a media id given as text, the way WordPress gives some', function (): void {
+        $this->disk->storage->write(($this->around)('card'), 'crop');
+
+        $this->declared->focalWillChange(1, '7', '_pollora_focal_point');
+        unset($this->postMeta[7]);
+        $this->declared->focalChanged(1, '7', '_pollora_focal_point');
+
+        expect($this->disk->storage->exists(($this->around)('card')))->toBeFalse();
+    });
+});
+
+it('lists no file of a media that is not an image it can make sizes of', function (array $metadata): void {
+    $this->disk->storage->write(($this->plain)('card'), 'x');
+
+    expect(($this->make)()->existingFiles($metadata))->toBe([]);
+})->with([
+    'a GIF' => [['file' => '2026/10/photo.gif', 'width' => 10, 'height' => 10]],
+    'no dimensions' => [['file' => '2026/10/photo.jpg']],
+    'no file' => [['width' => 10, 'height' => 10]],
+]);
+
+it('knows an image by its extension, in any case', function (string $file, bool $makeable): void {
+    expect(($this->make)()->isMakeable(['file' => $file, 'width' => 10, 'height' => 10]))->toBe($makeable);
+})->with([
+    ['a.JPG', true], ['a.Png', true], ['a.webp', true], ['a.avif', true], ['a.GIF', false], ['a.pdf', false],
+]);
+
+it('lists a file once when two sizes would make the same one', function (): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    $sizes->add('card')->cover(600, 400);
+    $declared = new DeclaredSizes($sizes, $this->config, $this->disk->storage, $this->processor);
+    $file = $sizes->names()->for('2026/10/photo.jpg', $sizes->get('card'), 3000, 2000);
+    $this->disk->storage->write($file, 'x');
+
+    expect($declared->existingFiles($this->meta))->toBe([$file]);
+});

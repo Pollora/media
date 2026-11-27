@@ -293,3 +293,25 @@ it('has nothing to sign for a private media without sources', function (): void 
     expect($this->private->srcset(false, [], '', [], 7))->toBeFalse()
         ->and($this->private->url(false, 7))->toBeFalse();
 });
+
+it('lists each file once, whatever the shape of the metadata and of what a plugin adds', function (): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn([
+        'file' => 'photo.jpg',
+        'sizes' => ['broken' => 'not a size', 'nameless' => ['width' => 1], 'numbered' => ['file' => 12], 'a' => ['file' => 'photo-1x1.jpg'], 'b' => ['file' => 'photo-1x1.jpg']],
+    ]);
+    Filters\expectApplied('pollora/media/attachment_files')->andReturn(['/photo.webp', 'photo.jpg']);
+
+    expect((new AttachmentFiles(fn (array $metadata, int $id): array => ['photo-card.webp']))->for(7))
+        ->toBe(['photo.jpg', 'photo-1x1.jpg', 'photo-card.webp', 'photo.webp']);
+});
+
+it('still lists what a plugin declares for a media without metadata', function (mixed $metadata, mixed $declared, array $files): void {
+    Functions\when('wp_get_attachment_metadata')->justReturn($metadata);
+    Filters\expectApplied('pollora/media/attachment_files')->andReturn($declared);
+
+    expect((new AttachmentFiles)->for(7))->toBe($files);
+})->with([
+    'no metadata' => [false, ['docs/a.pdf'], ['docs/a.pdf']],
+    'no file' => [['sizes' => ['a' => ['file' => 'x.jpg']]], [], []],
+    'a filter that answers nonsense' => [false, 'docs/a.pdf', []],
+]);
