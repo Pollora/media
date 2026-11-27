@@ -165,3 +165,60 @@ it('names the Bunny classes with letters and digits only, and refuses the second
         ->and($this->pullZone->saved[0][4]['Properties'])->toMatchArray(['width' => '100'])
         ->and(implode(' ', $report->warnings))->toContain('"mysize" would get the Bunny class');
 });
+
+it('goes on with the other sizes after one the service cannot serve', function (string $driver): void {
+    $sizes = new ImageSizes(fn (): string => 'secret-key');
+    // `default` is a preset imgproxy applies to every URL; an anchored cover is not a Bunny class
+    $sizes->add('default')->cover(100, 100, Anchor::Top);
+    $sizes->add('card')->cover(600, 400);
+    $report = (new ThumbnailExporter($sizes, $this->settings, new ThumbnailLimits, new MediaConfig('https://media.client.fr'), $this->pullZone))->export($driver, false);
+
+    expect($report->warnings)->not->toBe([])
+        ->and(implode("\n", $report->lines))->toContain('card');
+})->with(['bunny', 'imgproxy']);
+
+it('replaces the class that differs in its place, and keeps the list of classes a list', function (): void {
+    $pullZone = new FakePullZone([
+        ['Name' => 'mine', 'Properties' => ['width' => '1']],
+        ['Name' => 'card', 'Properties' => ['width' => '1']],
+    ]);
+
+    ($this->exporter)(null, $pullZone)->export('bunny', true);
+    $saved = $pullZone->saved[0];
+
+    expect(array_is_list($saved))->toBeTrue()
+        ->and(array_column($saved, 'Name'))->toBe(['mine', 'card', 'hero', 'hero640w', 'hero1024w'])
+        ->and($saved[0]['Properties'])->toBe(['width' => '1'])
+        ->and($saved[1]['Properties']['width'])->toBe('600');
+});
+
+it('does not rewrite a class that Bunny returns with its values as numbers', function (): void {
+    ($this->exporter)()->export('bunny', true);
+    $asNumbers = array_map(static fn (array $class): array => ['Name' => $class['Name'], 'Properties' => array_map(static fn (string $value): int|string => ctype_digit($value) ? (int) $value : $value, $class['Properties'])], $this->pullZone->classes);
+
+    $report = ($this->exporter)(null, new FakePullZone($asNumbers))->export('bunny', false);
+
+    expect($report->updated)->toBe([])->and($report->created)->toBe([]);
+});
+
+it('rounds the limit of pixels up to the megapixel imgproxy counts in', function (): void {
+    $exporter = new ThumbnailExporter($this->sizes, $this->settings, new ThumbnailLimits(maxPixels: 12_100_000), new MediaConfig('https://media.client.fr'));
+
+    expect($exporter->export('imgproxy', false)->lines)->toContain('IMGPROXY_MAX_SRC_RESOLUTION=13');
+});
+
+it('allows the URL of the library as the source unless the source is s3 and has a bucket', function (string $source, ?string $bucket, string $allowed): void {
+    $settings = new ThumbnailDriverSettings(driver: 'imgproxy', imgproxySource: $source, imgproxyBucket: $bucket);
+
+    expect(($this->exporter)($settings)->export('imgproxy', false)->lines)->toContain('IMGPROXY_ALLOWED_SOURCES='.$allowed);
+})->with([
+    ['url', 'media', 'https://media.client.fr/'],
+    ['s3', null, 'https://media.client.fr/'],
+    ['s3', 'media', 's3://media/'],
+]);
+
+it('knows the loopback address in capitals too', function (): void {
+    $exporter = new ThumbnailExporter($this->sizes, $this->settings, new ThumbnailLimits, new MediaConfig('http://LOCALHOST:8080/uploads'));
+
+    expect(implode("\n", $exporter->export('imgproxy', false)->warnings))->toContain('loopback');
+});

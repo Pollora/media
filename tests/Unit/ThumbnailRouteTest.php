@@ -19,7 +19,7 @@ beforeEach(function (): void {
     $this->sizes->add('card')->cover(600, 400);
     $this->disk->storage->write('2026/10/photo.png', PngHeader::bytes(3000, 2000));
     $this->lockDir = sys_get_temp_dir().'/pollora-media-route-locks-'.bin2hex(random_bytes(4));
-    $service = new ThumbnailService(
+    $this->service = $service = new ThumbnailService(
         $this->disk->storage,
         $this->sizes,
         new FakeImageProcessor($this->disk->storage),
@@ -134,4 +134,10 @@ function answerTo(string $requestUri, string $root, int &$status = 0): string
 it('sends the size it made and ends the request, and lets WordPress answer for one it cannot make', function (): void {
     expect(answerTo('/content/uploads/'.$this->file, $this->disk->root))->toBe('200|image 600x400')
         ->and(answerTo('/content/uploads/2026/10/gone-card-600x400-0123456789ab.webp', $this->disk->root))->toBe('|next');
+});
+
+it('reads the key under a library served at the root of a host', function (): void {
+    $route = new ThumbnailRoute($this->service, new MediaConfig('https://media.test/'));
+
+    expect($route->keyOf('/2026/10/photo-card-600x400-0123456789ab.webp'))->toBe('2026/10/photo-card-600x400-0123456789ab.webp');
 });
