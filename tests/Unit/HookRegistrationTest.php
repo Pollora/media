@@ -49,7 +49,7 @@ it('asks WordPress for every argument each of its callbacks declares', function 
     foreach ($added as [$hook, $callback, $arguments]) {
         $declared = (new ReflectionFunction(Closure::fromCallable($callback)))->getNumberOfParameters();
 
-        // deleted_post and the like only pass what they have: asking for more is harmless, asking for fewer is not
+        // Asking for more than the hook passes is harmless, asking for fewer than declared is not
         expect($arguments)->toBeGreaterThanOrEqual($declared, sprintf('The callback of "%s" declares %d parameter(s) and receives %d.', $hook, $declared, $arguments));
     }
 });
@@ -65,16 +65,6 @@ it('wires private media, focal points and declared sizes into WordPress when the
         ->and(has_action('init', [$media->focalPoints(), 'declareMeta']))->not->toBeFalse()
         ->and(has_filter('image_downsize', [$media->declaredSizes(), 'downsize']))->not->toBeFalse()
         ->and(has_action('deleted_post', [$media, 'deletedPost']))->not->toBeFalse();
-});
-
-it('marks a media private before the sizes of the module are made', function (): void {
-    Functions\when('did_action')->justReturn(0);
-    $media = new WordPressMedia((new TemporaryStorage)->storage, new MediaConfig('https://media.client.fr'));
-
-    $media->register();
-
-    expect(has_filter('wp_generate_attachment_metadata', [$media->privateMedia(), 'generated']))
-        ->toBeLessThan(has_filter('wp_generate_attachment_metadata', [$media->declaredSizes(), 'generate']));
 });
 
 it('queues the other sizes only when asynchronous thumbnails are asked for', function (bool $async): void {

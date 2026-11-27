@@ -256,7 +256,7 @@ it('says a media was deleted once, with the files it had', function (): void {
     $this->media->deletedPost(42);
 });
 
-it('registers its commands for the uploads folder and URL of WordPress', function (): void {
+it('registers its two commands under WP-CLI', function (): void {
     WP_CLI::reset();
     Functions\when('did_action')->justReturn(0);
 

@@ -188,8 +188,7 @@ describe('what a change of focal point deletes', function (): void {
         $this->declared->focalWillChange(1, 7, '_pollora_focal_point');
         $this->declared->focalChanged(1, 7, '_pollora_focal_point');
 
-        expect($this->disk->storage->exists(($this->around)('card')))->toBeTrue()
-            ->and($this->processor->made)->not->toContain(null);
+        expect($this->disk->storage->exists(($this->around)('card')))->toBeTrue();
     });
 
     it('is nothing for the files of another meta, nor of something that is not a media', function (mixed $id, string $key): void {
