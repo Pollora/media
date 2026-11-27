@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Development only: `antecedent/patchwork` is required at commit `d588654` of its `master` branch (antecedent/patchwork#235), aliased as 2.2.6, so that Pest mutants are no longer counted as caught when tests hang. This pin is temporary until the next Patchwork release
 - A file is treated as private when the database query that looks its media up fails, instead of public
 - A personal data export archive that cannot be read is no longer copied to the disk as an empty file before a `TypeError`: `PrivacyExportFailedException` is thrown and the disk is left alone
 - A write through `pollora://` no longer ends in a `TypeError` when the temporary directory cannot be written: the file is stored, only its local copy is given up

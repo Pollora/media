@@ -9,6 +9,6 @@
         "phpstan_baseline": 0,
         "coverage": 93,
         "type_coverage": 99.4,
-        "msi": 94
+        "msi": 79
     }
 }
