@@ -76,3 +76,11 @@ it('marks a media private before the sizes of the module are made', function ():
     expect(has_filter('wp_generate_attachment_metadata', [$media->privateMedia(), 'generated']))
         ->toBeLessThan(has_filter('wp_generate_attachment_metadata', [$media->declaredSizes(), 'generate']));
 });
+
+it('queues the other sizes only when asynchronous thumbnails are asked for', function (bool $async): void {
+    Functions\when('did_action')->justReturn(0);
+
+    (new WordPressMedia((new TemporaryStorage)->storage, new MediaConfig('https://media.client.fr', asyncThumbnails: $async)))->register();
+
+    expect(has_filter('wp_generate_attachment_metadata', 'Pollora\\Media\\Infrastructure\\WordPress\\AsyncThumbnails->queueTheRest()') !== false)->toBe($async);
+})->with([true, false]);

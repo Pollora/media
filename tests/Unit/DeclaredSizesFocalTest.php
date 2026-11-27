@@ -241,3 +241,15 @@ it('lists a file once when two sizes would make the same one', function (): void
 
     expect($declared->existingFiles($this->meta))->toBe([$file]);
 });
+
+it('keeps a crop made on demand when the focal point is saved without moving', function (): void {
+    $declared = ($this->make)();
+    Functions\when('wp_update_attachment_metadata')->justReturn(true);
+    // `banner` is not eager: nothing would make it again
+    $this->disk->storage->write(($this->around)('banner'), 'made on demand');
+
+    $declared->focalWillChange(1, 7, '_pollora_focal_point');
+    $declared->focalChanged(1, 7, '_pollora_focal_point');
+
+    expect($this->disk->storage->exists(($this->around)('banner')))->toBeTrue();
+});

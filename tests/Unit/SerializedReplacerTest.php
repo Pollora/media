@@ -78,3 +78,10 @@ it('replaces as plain text what only looks serialized', function (string $value,
 it('leaves a value alone when there is nothing to search for', function (): void {
     expect((new SerializedReplacer)->replace('abc', '', 'x'))->toBe('abc');
 });
+
+it('changes nothing of a value that holds an unknown object, not even the strings beside it', function (string $value): void {
+    expect((new SerializedReplacer)->replace($value, 'https://old.test', 'https://m.test'))->toBe($value);
+})->with([
+    'in an array' => fn (): string => serialize(['url' => 'https://old.test/a.jpg', 'gadget' => new SerializedGadget('x')]),
+    'deep in a stdClass' => fn (): string => serialize((object) ['url' => 'https://old.test/a.jpg', 'inner' => [(object) ['gadget' => new SerializedGadget('x')]]]),
+]);

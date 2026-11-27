@@ -275,3 +275,9 @@ it('computes the size of an original whose dimensions were stored as text', func
 it('leaves the srcset of a document alone', function (): void {
     expect($this->declared->srcset(['kept'], [1, 1], 'https://media.client.fr/'.$this->cardFile, ['file' => '2026/10/doc.pdf'], 7))->toBe(['kept']);
 });
+
+it('keeps the answer of WordPress when it has no srcset at all', function (): void {
+    $heroFile = $this->sizes->names()->for('2026/10/photo.jpg', $this->sizes->get('hero'), 3000, 2000);
+
+    expect($this->declared->srcset(false, [1920, 1280], 'https://media.client.fr/'.$heroFile, $this->meta, 7))->toBeFalse();
+});
